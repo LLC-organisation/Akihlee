@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Akihlee - System Architecture Baseline v1.0</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --card-border: #334155;
+            --primary: #38bdf8;
+            --secondary: #818cf8;
+            --accent-green: #34d399;
+            --accent-amber: #fbbf24;
+            --accent-purple: #c084fc;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 24px;
+        }
+
+        h1, h2, h3 {
+            margin: 0 0 12px 0;
+            font-weight: 600;
+        }
+
+        h1 { font-size: 24px; color: var(--primary); }
+        h2 { font-size: 18px; color: var(--secondary); border-bottom: 2px solid var(--card-border); padding-bottom: 8px; margin-bottom: 20px;}
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+        }
+
+        .architecture-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .layer {
+            background-color: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 16px;
+            position: relative;
+        }
+
+        .layer-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            font-weight: 700;
+        }
+
+        .flex-row {
+            display: flex;
+            gap: 16px;
+            justify-content: space-around;
+            flex-wrap: wrap;
+        }
+
+        .box {
+            background: #0f172a;
+            border: 1px solid var(--card-border);
+            border-radius: 6px;
+            padding: 12px 20px;
+            text-align: center;
+            min-width: 140px;
+            flex: 1;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+        }
+
+        .box.client { border-color: var(--primary); color: var(--primary); }
+        .box.gateway { border-color: var(--secondary); color: var(--secondary); font-weight: bold; }
+        .box.core { border-color: var(--accent-amber); }
+        .box.ai { border-color: var(--accent-purple); }
+        .box.worker { border-color: var(--accent-green); }
+
+        .arrow-down {
+            text-align: center;
+            font-size: 20px;
+            color: var(--text-muted);
+            margin: -8px 0;
+        }
+
+        /* Flow Diagram Section */
+        .workflow-step {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .step-number {
+            background-color: var(--primary);
+            color: #0f172a;
+            font-weight: bold;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .step-card {
+            background: #0f172a;
+            border: 1px solid var(--card-border);
+            border-radius: 6px;
+            padding: 10px 16px;
+            flex-grow: 1;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-left: 8px;
+        }
+
+        .badge-java { background: #ea580c; color: white; }
+        .badge-python { background: #0284c7; color: white; }
+        .badge-postgres { background: #334155; color: #38bdf8; }
+
+        .grid-2col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 768px) {
+            .grid-2col { grid-template-columns: 1fr; }
+            .flex-row { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div>
+        <h1>Akihlee — AI Finance OS for SMEs</h1>
+        <p style="color: var(--text-muted); margin: 0;">Logical Architecture Baseline v1.0 Overview</p>
+    </div>
+
+    <!-- Logical Architecture Diagram -->
+    <div class="layer">
+        <h2>1. Logical System Architecture</h2>
+        
+        <div class="architecture-grid">
+            <!-- Client Layer -->
+            <div class="layer">
+                <div class="layer-title">Client Channels</div>
+                <div class="flex-row">
+                    <div class="box client">Web / PWA (Next.js)</div>
+                    <div class="box client">WhatsApp Channel</div>
+                    <div class="box client">Email Inbound</div>
+                </div>
+            </div>
+
+            <div class="arrow-down">⬇</div>
+
+            <!-- API Gateway Layer -->
+            <div class="layer">
+                <div class="layer-title">API Gateway / BFF Layer</div>
+                <div class="flex-row">
+                    <div class="box gateway">API Gateway / Auth / Rate Limiting / Correlation ID</div>
+                </div>
+            </div>
+
+            <div class="arrow-down">⬇</div>
+
+            <!-- Application Core Layer -->
+            <div class="layer">
+                <div class="layer-title">Core Application Services <span class="badge badge-java">Java 21 / Spring Boot</span></div>
+                <div class="flex-row">
+                    <div class="box core">Identity & Multi-Tenant</div>
+                    <div class="box core">Finance Core</div>
+                    <div class="box core">Double-Entry Ledger</div>
+                    <div class="box core">Reconciliation</div>
+                    <div class="box ai">AI Assistant Orchestrator</div>
+                </div>
+            </div>
+
+            <div class="arrow-down">⬇</div>
+
+            <!-- Async Processing & Workers -->
+            <div class="layer">
+                <div class="layer-title">Asynchronous Worker Layer <span class="badge badge-python">Python / FastAPI Workers</span></div>
+                <div class="flex-row">
+                    <div class="box worker">Event Queue (RabbitMQ/SQS)</div>
+                    <div class="box worker">OCR & Document Extraction</div>
+                    <div class="box worker">Integration Adapters (M-Pesa, Banks)</div>
+                </div>
+            </div>
+
+            <div class="arrow-down">⬇</div>
+
+            <!-- Data & Persistence -->
+            <div class="layer">
+                <div class="layer-title">Data & Storage Layer <span class="badge badge-postgres">PostgreSQL</span></div>
+                <div class="flex-row">
+                    <div class="box">PostgreSQL (Immutable Journals, Tenants)</div>
+                    <div class="box">S3 Private Object Storage (Receipts/Docs)</div>
+                    <div class="box">Redis Cache / Session</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid-2col">
+        <!-- Key Workflow: Receipt Capture -->
+        <div class="layer">
+            <h2>2. Workflow: Receipt Capture Pipeline</h2>
+            
+            <div class="workflow-step">
+                <div class="step-number">1</div>
+                <div class="step-card">
+                    <strong>Upload & Ingestion:</strong> User submits document via Web, WhatsApp, or Email.
+                </div>
+            </div>
+
+            <div class="workflow-step">
+                <div class="step-number">2</div>
+                <div class="step-card">
+                    <strong>Storage & Event:</strong> Core API validates file, stores in S3, creates metadata, and queues <code>document.received</code> event.
+                </div>
+            </div>
+
+            <div class="workflow-step">
+                <div class="step-number">3</div>
+                <div class="step-card">
+                    <strong>Async OCR Extraction:</strong> Worker processes image, runs field extraction, and validates confidence scores.
+                </div>
+            </div>
+
+            <div class="workflow-step">
+                <div class="step-number">4</div>
+                <div class="step-card">
+                    <strong>Validation & Human Review:</strong> High-confidence records update draft journal entries; low-confidence records route to Review Queue.
+                </div>
+            </div>
+
+            <div class="workflow-step">
+                <div class="step-number">5</div>
+                <div class="step-card">
+                    <strong>Posting & Audit:</strong> Approved entries post to double-entry ledger and generate append-only audit events.
+                </div>
+            </div>
+        </div>
+
+        <!-- System Guardrails & Non-Functionals -->
+        <div class="layer">
+            <h2>3. Architectural Guardrails</h2>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div class="step-card" style="border-left: 4px solid var(--accent-amber);">
+                    <strong>Financial Integrity:</strong> Double-entry bookkeeping with <code>DECIMAL/NUMERIC</code> database types. No binary floating-point math.
+                </div>
+                <div class="step-card" style="border-left: 4px solid var(--accent-purple);">
+                    <strong>AI Safety:</strong> LLMs act as orchestrators invoking explicit, read-only system tools. High-impact actions require user approval.
+                </div>
+                <div class="step-card" style="border-left: 4px solid var(--primary);">
+                    <strong>Tenant Isolation:</strong> Every database record carries tenant context enforced via server-side authorization filters.
+                </div>
+                <div class="step-card" style="border-left: 4px solid var(--accent-green);">
+                    <strong>Auditability:</strong> Material changes generate immutable, append-only audit logs with unique correlation IDs.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

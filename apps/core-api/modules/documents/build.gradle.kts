@@ -1,0 +1,22 @@
+plugins {
+    id("org.springframework.boot")
+}
+
+dependencies {
+    implementation(project(":modules:identity"))
+    implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    implementation("org.springframework.boot:spring-boot-starter-validation")
+
+    // For file storage
+    implementation("software.amazon.awssdk:s3:2.26.20")
+
+    // PostgreSQL
+    runtimeOnly("org.postgresql:postgresql")
+
+    // Test containers for integration tests
+    testImplementation("org.testcontainers:testcontainers")
+    testImplementation("org.testcontainers:postgresql")
+    testImplementation("org.testcontainers:junit-jupiter")
+    testImplementation("org.springframework.boot:spring-boot-testcontainers")
+}

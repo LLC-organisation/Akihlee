@@ -1,0 +1,103 @@
+version: '3.9'
+
+services:
+  # PostgreSQL - System of Record
+  postgres:
+    image: postgres:16-alpine
+    container_name: akihlee-postgres
+    environment:
+      POSTGRES_DB: akihlee_dev
+      POSTGRES_USER: akihlee
+      POSTGRES_PASSWORD: dev_password_change_in_production
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U akihlee"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis - Cache & Session Store
+  redis:
+    image: redis:7-alpine
+    container_name: akihlee-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass dev_redis_password
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # RabbitMQ - Message Queue for async processing
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: akihlee-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: akihlee
+      RABBITMQ_DEFAULT_PASS: dev_rabbitmq_password
+    ports:
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MinIO - S3-compatible object storage
+  minio:
+    image: minio/minio:latest
+    container_name: akihlee-minio
+    environment:
+      MINIO_ROOT_USER: akihlee
+      MINIO_ROOT_PASSWORD: dev_minio_password_min_8_chars
+    ports:
+      - "9000:9000"  # API port
+      - "9001:9001"  # Console UI
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MinIO bucket initialization
+  minio-init:
+    image: minio/mc:latest
+    container_name: akihlee-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set akihlee http://minio:9000 akihlee dev_minio_password_min_8_chars;
+      mc mb --ignore-existing akihlee/documents;
+      mc mb --ignore-existing akihlee/exports;
+      mc anonymous set download akihlee/exports;
+      echo 'MinIO buckets initialized';
+      "
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+  minio_data:
+    driver: local
+
+networks:
+  default:
+    name: akihlee-network
