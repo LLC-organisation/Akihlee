@@ -136,6 +136,11 @@ pytest
 
 - **Multi-tenant architecture** with tenant isolation at database level
 - **Document upload** with S3/MinIO storage
+- **Square integration** for POS/payment data collection
+  - Idempotent transaction sync
+  - Automatic amount conversion (cents → decimal)
+  - Tenant-isolated transaction import
+  - Reconciliation tracking
 - **Tracer bullet test** for tenant-isolated document upload
 - **Docker Compose** for local development infrastructure
 - **FastAPI worker** scaffolding for OCR processing
@@ -146,11 +151,13 @@ pytest
 - Document OCR extraction pipeline
 - RabbitMQ event-driven processing
 - Double-entry ledger module
+- Square webhook support (real-time updates)
 
 ### 📅 Planned
 
-- M-Pesa Daraja integration
+- M-Pesa Daraja integration (Kenya mobile money)
 - Plaid API integration (US banks)
+- Email/WhatsApp receipt capture
 - AI CFO recommendations
 - Financial reports (P&L, Balance Sheet, Cash Flow)
 
@@ -232,8 +239,9 @@ docker compose up minio-init
 ## 📚 Documentation
 
 - [Solution Architecture Document](Akihlee_Solutions_Architecture_Document.pdf)
+- [Square Integration Guide](docs/integrations/SQUARE.md)
+- [Infrastructure Setup](infrastructure/docker/README.md)
 - [STRIDE Threat Model](docs/architecture/threat-model.md) (planned)
-- [Infrastructure Guide](infrastructure/docker/README.md)
 
 ## 🤝 Contributing
 
