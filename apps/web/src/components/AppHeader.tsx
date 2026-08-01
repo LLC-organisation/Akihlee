@@ -12,7 +12,7 @@ function Logo() {
   const [imgFailed, setImgFailed] = useState(false);
   if (imgFailed) {
     return (
-      <span className="flex items-center justify-center w-8 h-8 rounded-md bg-primary-600 text-white font-bold text-sm">
+      <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-accent-gradient text-white font-bold text-sm shadow-sm shadow-blue-500/20">
         A
       </span>
     );
@@ -22,7 +22,7 @@ function Logo() {
     <img
       src="/logo.png"
       alt="Akihlee"
-      className="w-8 h-8 rounded-md object-contain"
+      className="w-8 h-8 rounded-lg object-contain"
       onError={() => setImgFailed(true)}
     />
   );
@@ -40,10 +40,10 @@ const NAV_LINKS = [
 ] as const;
 
 function navLinkClasses(active: boolean): string {
-  return `px-3 py-2 rounded-md text-sm font-medium ${
+  return `px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
     active
-      ? 'bg-primary-50 dark:bg-slate-800 text-primary-700 dark:text-primary-300'
-      : 'text-slate-600 dark:text-slate-300 hover:text-primary-700 dark:hover:text-primary-300 hover:bg-primary-50 dark:hover:bg-slate-800'
+      ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400'
+      : 'text-slate-600 dark:text-slate-400 hover:text-blue-700 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10'
   }`;
 }
 
@@ -58,7 +58,7 @@ export function AppHeader() {
   };
 
   return (
-    <header className="bg-white dark:bg-slate-900 border-b border-primary-100 dark:border-slate-700">
+    <header className="sticky top-0 z-20 bg-white/80 dark:bg-canvas/80 backdrop-blur-xl border-b border-slate-200 dark:border-white/10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <Link href="/dashboard" className="flex items-center gap-2 shrink-0">
@@ -87,7 +87,7 @@ export function AppHeader() {
             <ThemeToggle />
             <button
               onClick={handleLogout}
-              className="text-sm font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 px-3 py-2"
+              className="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-blue-700 dark:hover:text-blue-400 transition-colors duration-200 px-3 py-2"
             >
               Log out
             </button>
@@ -96,7 +96,7 @@ export function AppHeader() {
           {/* Mobile hamburger toggle */}
           <button
             type="button"
-            className="lg:hidden p-2 -mr-2 text-slate-600 dark:text-slate-300 hover:text-primary-700 dark:hover:text-primary-300"
+            className="lg:hidden p-2 -mr-2 text-slate-600 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400"
             aria-label={menuOpen ? 'Close menu' : 'Open menu'}
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((open) => !open)}
@@ -134,11 +134,11 @@ export function AppHeader() {
             >
               akihlee.com
             </a>
-            <div className="pt-2 mt-2 border-t border-primary-100 dark:border-slate-700 flex items-center justify-between">
+            <div className="pt-2 mt-2 border-t border-slate-200 dark:border-white/10 flex items-center justify-between">
               <ThemeToggle />
               <button
                 onClick={handleLogout}
-                className="text-sm font-medium text-primary-600 dark:text-primary-400 px-3 py-2"
+                className="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-blue-700 dark:hover:text-blue-400 px-3 py-2"
               >
                 Log out
               </button>

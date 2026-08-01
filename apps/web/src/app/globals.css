@@ -27,3 +27,36 @@ label:has(input:focus-visible) {
 .dark label:has(input:focus-visible) {
   outline-color: #3684d6;
 }
+
+/* Soft ambient background glows for dark-mode dashboard pages. Fixed,
+   behind content, non-interactive — purely decorative depth, not a layout
+   element, so it's plain CSS rather than a Tailwind utility. */
+.bg-glow {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+/* Dark-mode only — a bright blurred blob reads as depth on a near-black
+   canvas but as a mistake on a white one, so light mode stays plain. */
+.dark .bg-glow::before,
+.dark .bg-glow::after {
+  content: '';
+  position: absolute;
+  width: 40rem;
+  height: 40rem;
+  border-radius: 9999px;
+  filter: blur(120px);
+  opacity: 0.15;
+}
+.bg-glow::before {
+  top: -10rem;
+  right: -10rem;
+  background: #3b82f6;
+}
+.bg-glow::after {
+  bottom: -14rem;
+  left: -10rem;
+  background: #06b6d4;
+}

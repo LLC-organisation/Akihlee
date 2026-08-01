@@ -44,6 +44,21 @@ const config: Config = {
           800: '#232d40',
           900: '#161c29',
         },
+        // Dark-mode-only fintech dashboard surfaces — deliberately distinct
+        // from the "slate" scale above (which still drives light mode and
+        // borders/secondary text everywhere): a richer, deeper canvas than
+        // slate-900, with translucent-feeling card surfaces on top of it.
+        canvas: {
+          DEFAULT: '#0b0f19',
+        },
+        surface: {
+          DEFAULT: '#131b2e',
+          raised: '#161f33',
+        },
+      },
+      backgroundImage: {
+        // Primary CTA gradient for dark mode (electric cyan/blue).
+        'accent-gradient': 'linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%)',
       },
     },
   },

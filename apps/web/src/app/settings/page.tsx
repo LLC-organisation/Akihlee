@@ -9,23 +9,23 @@ import { isAxiosError } from 'axios';
 
 function SectionCard({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
-    <div className="bg-slate-50 dark:bg-slate-800 rounded-lg border border-primary-100 dark:border-slate-700 p-6 sm:p-8">
+    <div className="bg-white dark:bg-surface border border-slate-200 dark:border-white/10 rounded-2xl shadow-sm dark:shadow-none p-6 sm:p-8 transition-all duration-200">
       <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{title}</h2>
-      {description && <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 mb-4">{description}</p>}
+      {description && <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">{description}</p>}
       <div className={description ? '' : 'mt-4'}>{children}</div>
     </div>
   );
 }
 
 const inputClasses =
-  'w-full rounded-md border border-primary-200 dark:border-slate-600 px-3 py-2 text-slate-900 dark:text-white dark:bg-slate-900 focus:border-primary-500';
+  'w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-canvas px-3 py-2.5 text-slate-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-400 transition-colors duration-200';
 const labelClasses = 'block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1';
 const primaryButtonClasses =
-  'px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:bg-primary-300 dark:disabled:bg-primary-800 text-white text-sm font-medium rounded-md transition-colors';
+  'inline-flex items-center justify-center gap-2 bg-accent-gradient text-white text-sm font-medium rounded-lg px-4 py-2.5 hover:opacity-90 hover:shadow-md hover:shadow-blue-500/20 transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none';
 const successBanner =
-  'mb-4 rounded-md bg-primary-50 dark:bg-slate-900 border border-primary-200 dark:border-primary-700 text-primary-800 dark:text-primary-300 text-sm px-4 py-3';
+  'mb-4 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-sm px-4 py-3';
 const errorBanner =
-  'mb-4 rounded-md bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 text-sm px-4 py-3';
+  'mb-4 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400 text-sm px-4 py-3';
 
 function AppearanceSection() {
   const [theme, setThemeState] = useState<Theme>('light');
@@ -46,10 +46,10 @@ function AppearanceSection() {
           <button
             key={option}
             onClick={() => choose(option)}
-            className={`flex-1 px-4 py-3 rounded-md border text-sm font-medium capitalize transition-colors ${
+            className={`flex-1 px-4 py-3 rounded-lg border text-sm font-medium capitalize transition-all duration-200 ${
               theme === option
-                ? 'border-primary-500 bg-primary-50 dark:bg-slate-900 text-primary-700 dark:text-primary-300'
-                : 'border-primary-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-primary-50 dark:hover:bg-slate-700'
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400'
+                : 'border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:text-blue-700 dark:hover:text-blue-400'
             }`}
           >
             {option} mode
@@ -235,13 +235,13 @@ function WhatsAppSection({ tenant, onUpdated }: { tenant: Tenant; onUpdated: (t:
 
       {tenant.whatsappPhoneNumber ? (
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <p className="text-sm text-slate-700 dark:text-slate-300">
+          <p className="text-sm text-slate-600 dark:text-slate-300">
             Connected: <span className="font-medium text-slate-900 dark:text-white">+{tenant.whatsappPhoneNumber}</span>
           </p>
           <button
             onClick={handleDisconnect}
             disabled={saving}
-            className="px-4 py-2 text-sm font-medium rounded-md border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950"
+            className="px-4 py-2 text-sm font-medium rounded-lg border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors duration-200"
           >
             {saving ? 'Disconnecting…' : 'Disconnect'}
           </button>
@@ -285,12 +285,12 @@ function EmailSection({ tenant }: { tenant: Tenant }) {
       description="Forward or CC receipts and invoices to this address — attachments are picked up automatically."
     >
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <code className="flex-1 px-3 py-2 rounded-md bg-white dark:bg-slate-900 border border-primary-200 dark:border-slate-600 text-sm text-slate-900 dark:text-white break-all">
+        <code className="flex-1 px-3 py-2.5 rounded-lg bg-slate-50 dark:bg-canvas border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white break-all">
           {tenant.inboundEmailAddress}
         </code>
         <button
           onClick={handleCopy}
-          className="px-4 py-2 text-sm font-medium rounded-md border border-primary-200 dark:border-slate-600 text-primary-700 dark:text-primary-300 hover:bg-primary-50 dark:hover:bg-slate-700 whitespace-nowrap"
+          className="px-4 py-2.5 text-sm font-medium rounded-lg border border-slate-200 dark:border-white/10 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 whitespace-nowrap transition-colors duration-200"
         >
           {copied ? 'Copied!' : 'Copy address'}
         </button>
@@ -333,31 +333,34 @@ export default function SettingsPage() {
   if (!checkedAuth) return null;
 
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-900">
-      <AppHeader />
+    <div className="relative min-h-screen bg-white dark:bg-canvas">
+      <div className="bg-glow" />
+      <div className="relative z-10">
+        <AppHeader />
 
-      <main className="max-w-3xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">Settings</h1>
+        <main className="max-w-3xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">Settings</h1>
 
-        {loading && <p className="text-slate-500 dark:text-slate-400">Loading…</p>}
+          {loading && <p className="text-slate-500 dark:text-slate-400">Loading…</p>}
 
-        {!loading && error && (
-          <div className="text-center py-12">
-            <p className="text-red-800 dark:text-red-300 mb-3">{error}</p>
-            <button onClick={load} className={primaryButtonClasses}>Retry</button>
-          </div>
-        )}
+          {!loading && error && (
+            <div className="text-center py-12">
+              <p className="text-red-600 dark:text-red-400 mb-3">{error}</p>
+              <button onClick={load} className={primaryButtonClasses}>Retry</button>
+            </div>
+          )}
 
-        {!loading && !error && tenant && (
-          <div className="space-y-6">
-            <AppearanceSection />
-            <ProfileSection tenant={tenant} onUpdated={setTenant} />
-            <ChangePasswordSection />
-            <WhatsAppSection tenant={tenant} onUpdated={setTenant} />
-            <EmailSection tenant={tenant} />
-          </div>
-        )}
-      </main>
+          {!loading && !error && tenant && (
+            <div className="space-y-6">
+              <AppearanceSection />
+              <ProfileSection tenant={tenant} onUpdated={setTenant} />
+              <ChangePasswordSection />
+              <WhatsAppSection tenant={tenant} onUpdated={setTenant} />
+              <EmailSection tenant={tenant} />
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   );
 }
