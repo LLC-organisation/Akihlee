@@ -30,6 +30,11 @@ public class Tenant {
     @Column(nullable = false)
     private boolean active = true;
 
+    // Digits only (no "+"), matching WhatsApp Cloud API's wire format for
+    // the "from" field, so incoming webhook messages can be matched directly.
+    @Column(name = "whatsapp_phone_number", unique = true)
+    private String whatsappPhoneNumber;
+
     protected Tenant() {
         // JPA requires a no-arg constructor
     }
@@ -54,6 +59,11 @@ public class Tenant {
         return businessName;
     }
 
+    public void setBusinessName(String businessName) {
+        this.businessName = businessName;
+        this.updatedAt = Instant.now();
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }
@@ -68,6 +78,15 @@ public class Tenant {
 
     public void deactivate() {
         this.active = false;
+        this.updatedAt = Instant.now();
+    }
+
+    public String getWhatsappPhoneNumber() {
+        return whatsappPhoneNumber;
+    }
+
+    public void setWhatsappPhoneNumber(String whatsappPhoneNumber) {
+        this.whatsappPhoneNumber = whatsappPhoneNumber;
         this.updatedAt = Instant.now();
     }
 }

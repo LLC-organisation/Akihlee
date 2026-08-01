@@ -6,7 +6,7 @@ Docker Compose setup for local development environment.
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| PostgreSQL | 5432 | Transactional database |
+| PostgreSQL | 5434 | Transactional database |
 | Redis | 6379 | Cache & session store |
 | RabbitMQ | 5672, 15672 | Message queue |
 | MinIO | 9000, 9001 | Object storage (S3-compatible) |
@@ -31,7 +31,7 @@ docker compose down -v
 
 ## Service URLs
 
-- **PostgreSQL**: `jdbc:postgresql://localhost:5432/akihlee_dev`
+- **PostgreSQL**: `jdbc:postgresql://localhost:5434/akihlee_dev`
 - **Redis**: `redis://localhost:6379` (password required)
 - **RabbitMQ Management**: http://localhost:15672
 - **MinIO Console**: http://localhost:9001

@@ -2,26 +2,28 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 249, 250, 251;
-  --background-end-rgb: 255, 255, 255;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 15, 23, 42;
-    --background-end-rgb: 30, 41, 59;
-  }
-}
-
+/* Fintech theme: white/navy canvas with deep-navy/steel-blue accents and
+   pale blue-gray (light) or dark slate (dark) card surfaces. Light vs. dark
+   is an explicit user toggle (see ThemeToggle), applied via layout.tsx's
+   Tailwind classes — not driven by system preference. */
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  color: #161c29; /* slate-900, overridden by dark: classes in dark mode */
+}
+.dark body {
+  color: #f6f7f9; /* slate-50 */
+}
+
+/* Consistent, visible keyboard focus indicator across all interactive elements */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+label:has(input:focus-visible) {
+  outline: 2px solid #0353a4;
+  outline-offset: 2px;
+}
+.dark a:focus-visible,
+.dark button:focus-visible,
+.dark input:focus-visible,
+.dark label:has(input:focus-visible) {
+  outline-color: #3684d6;
 }

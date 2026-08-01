@@ -70,6 +70,9 @@ credentials/
 logs/
 *.log
 
+# run.sh's PID/log directory
+.run/
+
 # Temporary files
 tmp/
 temp/

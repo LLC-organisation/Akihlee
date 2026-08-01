@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: akihlee
       POSTGRES_PASSWORD: dev_password_change_in_production
     ports:
-      - "5432:5432"
+      - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
@@ -71,6 +71,34 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # Document Worker - OCR extraction (Python/FastAPI/Tesseract).
+  # Runs in Docker rather than natively so Tesseract/poppler don't need to
+  # be installed on the host (they're installed in the image's Dockerfile).
+  document-worker:
+    build:
+      context: ../../apps/document-worker
+    container_name: akihlee-document-worker
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: akihlee
+      RABBITMQ_PASSWORD: dev_rabbitmq_password
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: akihlee
+      S3_SECRET_KEY: dev_minio_password_min_8_chars
+      S3_BUCKET_DOCUMENTS: documents
+      # core-api runs natively on the host, not in this compose network.
+      CORE_API_URL: http://host.docker.internal:8080
+      INTERNAL_API_KEY: dev_internal_worker_key_change_in_production
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
 
   # MinIO bucket initialization
   minio-init:

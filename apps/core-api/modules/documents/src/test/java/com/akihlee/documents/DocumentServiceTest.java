@@ -3,12 +3,15 @@ package com.akihlee.documents;
 import com.akihlee.identity.Tenant;
 import com.akihlee.identity.TenantContext;
 import com.akihlee.identity.TenantRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Import;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -32,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Testcontainers
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({DocumentService.class, InMemoryStorageService.class})
+@Import({DocumentService.class, InMemoryStorageService.class, ObjectMapper.class})
 class DocumentServiceTest {
 
     @Container
@@ -50,6 +53,11 @@ class DocumentServiceTest {
 
     @Autowired
     private InMemoryStorageService storageService;
+
+    // Publishing to RabbitMQ is irrelevant to tenant-isolation behavior under
+    // test here, so it's mocked rather than requiring a real broker.
+    @MockBean
+    private RabbitTemplate rabbitTemplate;
 
     private Tenant tenantA;
     private Tenant tenantB;
@@ -88,7 +96,7 @@ class DocumentServiceTest {
         assertThat(uploaded.getFilename()).isEqualTo("receipt_001.pdf");
         assertThat(uploaded.getContentType()).isEqualTo("application/pdf");
         assertThat(uploaded.getSizeBytes()).isEqualTo(receiptContent.length);
-        assertThat(uploaded.getStatus()).isEqualTo(Document.DocumentStatus.UPLOADED);
+        assertThat(uploaded.getStatus()).isEqualTo(Document.DocumentStatus.PROCESSING);
 
         // And: Document should be retrievable by Tenant A
         Optional<Document> retrieved = documentService.getDocument(uploaded.getId());

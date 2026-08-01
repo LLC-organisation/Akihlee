@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     TESSERACT_PATH: str | None = None  # Auto-detect if None
     OCR_CONFIDENCE_THRESHOLD: float = 0.7
 
+    # Core API callback (extraction results are pushed back via REST rather
+    # than a second queue, so the schema stays owned in one place)
+    CORE_API_URL: str = "http://localhost:8080"
+    INTERNAL_API_KEY: str = "dev_internal_worker_key_change_in_production"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -10,6 +10,10 @@ dependencies {
 
     // For file storage
     implementation("software.amazon.awssdk:s3:2.26.20")
+    implementation("software.amazon.awssdk:url-connection-client:2.26.20")
+
+    // For publishing document-received events to the OCR worker
+    implementation("org.springframework.boot:spring-boot-starter-amqp")
 
     // PostgreSQL
     runtimeOnly("org.postgresql:postgresql")

@@ -1,6 +1,10 @@
 package com.akihlee.documents;
 
 import com.akihlee.identity.TenantContext;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,12 +18,22 @@ import java.util.UUID;
 @Service
 public class DocumentService {
 
+    private static final Logger log = LoggerFactory.getLogger(DocumentService.class);
+
     private final DocumentRepository documentRepository;
     private final StorageService storageService;
+    private final RabbitTemplate rabbitTemplate;
+    private final ObjectMapper objectMapper;
 
-    public DocumentService(DocumentRepository documentRepository, StorageService storageService) {
+    public DocumentService(
+            DocumentRepository documentRepository,
+            StorageService storageService,
+            RabbitTemplate rabbitTemplate,
+            ObjectMapper objectMapper) {
         this.documentRepository = documentRepository;
         this.storageService = storageService;
+        this.rabbitTemplate = rabbitTemplate;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -47,7 +61,25 @@ public class DocumentService {
             checksum
         );
 
-        return documentRepository.save(document);
+        Document saved = documentRepository.save(document);
+
+        saved.updateStatus(Document.DocumentStatus.PROCESSING);
+        saved = documentRepository.save(saved);
+        publishDocumentReceived(saved);
+
+        return saved;
+    }
+
+    private void publishDocumentReceived(Document document) {
+        try {
+            String payload = objectMapper.writeValueAsString(DocumentReceivedEvent.from(document));
+            rabbitTemplate.convertAndSend(RabbitMQConfig.DOCUMENTS_RECEIVED_QUEUE, payload);
+        } catch (Exception e) {
+            // Don't fail the upload if the OCR pipeline is unreachable — the
+            // document just stays at PROCESSING until it's requeued/retried
+            // manually; the user's upload still succeeds either way.
+            log.error("Failed to queue document {} for OCR processing", document.getId(), e);
+        }
     }
 
     /**
