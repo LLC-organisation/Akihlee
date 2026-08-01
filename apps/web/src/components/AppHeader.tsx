@@ -28,12 +28,16 @@ function Logo() {
   );
 }
 
+// "as const" keeps each href a literal type (e.g. "/dashboard") rather than
+// widened to plain string — required for next/link's href prop to satisfy
+// the typedRoutes experiment enabled in next.config, which next dev doesn't
+// check but next build does.
 const NAV_LINKS = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/extracted-data', label: 'Extracted Data' },
   { href: '/ai-cfo', label: 'AI CFO' },
   { href: '/settings', label: 'Settings' },
-];
+] as const;
 
 function navLinkClasses(active: boolean): string {
   return `px-3 py-2 rounded-md text-sm font-medium ${
