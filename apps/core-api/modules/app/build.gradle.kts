@@ -29,8 +29,18 @@ tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
             envFile.readLines().forEach { line ->
                 val trimmed = line.trim()
                 if (trimmed.isNotEmpty() && !trimmed.startsWith("#") && trimmed.contains("=")) {
-                    val (key, value) = trimmed.split("=", limit = 2)
-                    environment(key.trim(), value.trim())
+                    val (key, rawValue) = trimmed.split("=", limit = 2)
+                    var value = rawValue.trim()
+                    // Strip one matching pair of surrounding quotes, if present —
+                    // otherwise a quoted value (e.g. one wrapping special
+                    // characters) loads the literal quote characters too.
+                    if (value.length >= 2 &&
+                        ((value.startsWith("\"") && value.endsWith("\"")) ||
+                                (value.startsWith("'") && value.endsWith("'")))
+                    ) {
+                        value = value.substring(1, value.length - 1)
+                    }
+                    environment(key.trim(), value)
                 }
             }
         }

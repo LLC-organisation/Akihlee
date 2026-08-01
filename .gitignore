@@ -6,13 +6,17 @@
 # Java / Gradle
 .gradle/
 build/
-!gradle/wrapper/gradle-wrapper.jar
 *.class
 *.jar
 *.war
 *.ear
 *.log
 target/
+# Must come after the *.jar rule above (gitignore is order-sensitive) and
+# use the full path (a pattern containing "/" is anchored to this file's own
+# directory, not matched at any depth, so "gradle/wrapper/..." alone never
+# matched the actual nested apps/core-api/gradle/wrapper/... location).
+!apps/core-api/gradle/wrapper/gradle-wrapper.jar
 
 # IntelliJ IDEA
 .idea/

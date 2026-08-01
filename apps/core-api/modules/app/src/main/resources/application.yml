@@ -21,6 +21,12 @@ spring:
     port: ${RABBITMQ_PORT}
     username: ${RABBITMQ_USERNAME}
     password: ${RABBITMQ_PASSWORD}
+    virtual-host: ${RABBITMQ_VIRTUAL_HOST:/}
+    # CloudAMQP (and most managed RabbitMQ) serve AMQPS on port 5671, which
+    # is TLS-only — Spring doesn't infer this from the port number, so it
+    # must be enabled explicitly or the connection just hangs/fails.
+    ssl:
+      enabled: ${RABBITMQ_SSL_ENABLED:false}
 
 server:
   # Render (and similar PaaS hosts) inject PORT and expect the app to bind
