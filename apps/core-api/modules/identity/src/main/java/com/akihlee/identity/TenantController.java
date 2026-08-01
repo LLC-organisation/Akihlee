@@ -1,6 +1,7 @@
 package com.akihlee.identity;
 
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -12,14 +13,18 @@ import java.util.UUID;
 public class TenantController {
 
     private final TenantRepository tenantRepository;
+    private final String inboundEmailDomain;
 
-    public TenantController(TenantRepository tenantRepository) {
+    public TenantController(
+            TenantRepository tenantRepository,
+            @Value("${email.inbound-domain}") String inboundEmailDomain) {
         this.tenantRepository = tenantRepository;
+        this.inboundEmailDomain = inboundEmailDomain;
     }
 
     @GetMapping
     public TenantResponse get() {
-        return TenantResponse.from(currentTenant());
+        return toResponse(currentTenant());
     }
 
     @PutMapping
@@ -27,7 +32,7 @@ public class TenantController {
         Tenant tenant = currentTenant();
         tenant.setBusinessName(request.businessName());
         tenantRepository.save(tenant);
-        return TenantResponse.from(tenant);
+        return toResponse(tenant);
     }
 
     /**
@@ -54,7 +59,7 @@ public class TenantController {
         Tenant tenant = currentTenant();
         tenant.setWhatsappPhoneNumber(normalized);
         tenantRepository.save(tenant);
-        return TenantResponse.from(tenant);
+        return toResponse(tenant);
     }
 
     @DeleteMapping("/whatsapp-number")
@@ -62,13 +67,17 @@ public class TenantController {
         Tenant tenant = currentTenant();
         tenant.setWhatsappPhoneNumber(null);
         tenantRepository.save(tenant);
-        return TenantResponse.from(tenant);
+        return toResponse(tenant);
     }
 
     private Tenant currentTenant() {
         UUID tenantId = TenantContext.getCurrentTenantId();
         return tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
+    }
+
+    private TenantResponse toResponse(Tenant tenant) {
+        return TenantResponse.from(tenant, inboundEmailDomain);
     }
 
     private static String normalize(String phoneNumber) {

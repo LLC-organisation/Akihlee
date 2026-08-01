@@ -56,7 +56,7 @@ docker compose ps
 
 This starts:
 - PostgreSQL (port 5434) - Database
-- Redis (port 6379) - Cache
+- Redis (port 6380) - Cache
 - RabbitMQ (ports 5672, 15672) - Message queue
 - MinIO (ports 9000, 9001) - S3-compatible storage
 

@@ -98,6 +98,7 @@ export type Tenant = {
   id: string;
   businessName: string;
   whatsappPhoneNumber: string | null;
+  inboundEmailAddress: string;
 };
 
 export const tenantApi = {

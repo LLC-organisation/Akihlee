@@ -23,7 +23,12 @@ spring:
     password: ${RABBITMQ_PASSWORD}
 
 server:
-  port: ${SERVER_PORT:8080}
+  # Render (and similar PaaS hosts) inject PORT and expect the app to bind
+  # to it; SERVER_PORT still wins if you set it explicitly (e.g. locally).
+  port: ${SERVER_PORT:${PORT:8080}}
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
 
 s3:
   endpoint: ${S3_ENDPOINT}
@@ -47,3 +52,10 @@ whatsapp:
   access-token: ${WHATSAPP_ACCESS_TOKEN:}
   phone-number-id: ${WHATSAPP_PHONE_NUMBER_ID:}
   api-url: ${WHATSAPP_API_URL:https://graph.facebook.com/v20.0}
+
+# Optional until a real inbound-email provider (e.g. SendGrid Inbound
+# Parse) is configured with MX records for this domain — defaults let the
+# app boot and the webhook respond even with no real setup yet.
+email:
+  inbound-domain: ${EMAIL_INBOUND_DOMAIN:receipts.akihlee.com}
+  webhook-secret: ${EMAIL_WEBHOOK_SECRET:dev_email_webhook_secret_change_me}

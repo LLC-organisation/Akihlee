@@ -265,6 +265,40 @@ function WhatsAppSection({ tenant, onUpdated }: { tenant: Tenant; onUpdated: (t:
   );
 }
 
+function EmailSection({ tenant }: { tenant: Tenant }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(tenant.inboundEmailAddress);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API can fail (permissions, insecure context) — the
+      // address is still selectable/visible, so this is non-critical.
+    }
+  };
+
+  return (
+    <SectionCard
+      title="Email Integration"
+      description="Forward or CC receipts and invoices to this address — attachments are picked up automatically."
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <code className="flex-1 px-3 py-2 rounded-md bg-white dark:bg-slate-900 border border-primary-200 dark:border-slate-600 text-sm text-slate-900 dark:text-white break-all">
+          {tenant.inboundEmailAddress}
+        </code>
+        <button
+          onClick={handleCopy}
+          className="px-4 py-2 text-sm font-medium rounded-md border border-primary-200 dark:border-slate-600 text-primary-700 dark:text-primary-300 hover:bg-primary-50 dark:hover:bg-slate-700 whitespace-nowrap"
+        >
+          {copied ? 'Copied!' : 'Copy address'}
+        </button>
+      </div>
+    </SectionCard>
+  );
+}
+
 export default function SettingsPage() {
   const router = useRouter();
   const [checkedAuth, setCheckedAuth] = useState(false);
@@ -320,6 +354,7 @@ export default function SettingsPage() {
             <ProfileSection tenant={tenant} onUpdated={setTenant} />
             <ChangePasswordSection />
             <WhatsAppSection tenant={tenant} onUpdated={setTenant} />
+            <EmailSection tenant={tenant} />
           </div>
         )}
       </main>

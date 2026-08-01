@@ -25,7 +25,7 @@ services:
     image: redis:7-alpine
     container_name: akihlee-redis
     ports:
-      - "6379:6379"
+      - "6380:6379"
     command: redis-server --appendonly yes --requirepass dev_redis_password
     volumes:
       - redis_data:/data
