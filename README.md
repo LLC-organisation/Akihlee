@@ -156,7 +156,7 @@ No tests exist yet for the auth, OCR pipeline, or frontend code added since MVP.
 - **Real JWT authentication** — register/login/change-password, BCrypt password hashing, per-tenant data isolation verified end-to-end
 - **Document upload** to S3-compatible storage (Supabase Storage in production, MinIO locally), with a full REST API (`/api/v1/documents`, `/api/v1/auth/*`, `/api/v1/tenant/*`)
 - **Async OCR pipeline**: upload → RabbitMQ → `document-worker` (real Tesseract OCR + `pdf2image` for PDFs, regex-based field extraction — no LLM configured) → REST callback → `ExtractedData` table → paginated `/extracted-data` page. This is what will feed the AI CFO.
-- **WhatsApp Business Cloud API webhook** — scaffolded and verified with synthetic payloads; inert until a real Meta/Twilio account is connected (`WHATSAPP_*` env vars)
+- **WhatsApp integration via Twilio** — inbound webhook (form-encoded, signature-verified) feeds attached receipts/invoices into the same upload pipeline; outbound replies sent via the Twilio Messages API; needs `TWILIO_*` env vars to actually send/receive
 - **Inbound email webhook** — scaffolded around SendGrid Inbound Parse's format; each tenant gets a derived `{tenantId}@{domain}` address (shown in Settings); inert until a domain with MX records pointed at a provider is configured
 - **Settings page** — appearance (light/dark, user-toggled), business name, change password, WhatsApp connect/disconnect, email address display
 - **Placeholder AI CFO chat page** (`/ai-cfo`) — grounds replies in real `ExtractedData` stats rather than a real LLM (none configured; natural extension point once one is)
@@ -170,7 +170,7 @@ No tests exist yet for the auth, OCR pipeline, or frontend code added since MVP.
 - No automated tests for any of the above (auth, OCR pipeline, webhooks, frontend)
 - No `spring-boot-starter-actuator` or OpenAPI/Swagger — no `/actuator/health` or API docs endpoint yet
 - Double-entry ledger module not started
-- WhatsApp/email ingestion need real external accounts (Meta Business/Twilio, a domain + inbound-parse provider) before they do anything beyond respond to their own verification handshakes
+- Email ingestion needs a real external account (a domain + inbound-parse provider) before it does anything beyond respond to its own verification handshake; WhatsApp needs `TWILIO_AUTH_TOKEN` set to actually send/receive (account SID/number are configured)
 - OCR field extraction is regex/heuristic-based, not LLM-based (no `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` configured)
 
 ### 📅 Planned

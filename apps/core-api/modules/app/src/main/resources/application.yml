@@ -49,6 +49,10 @@ server:
   # Render (and similar PaaS hosts) inject PORT and expect the app to bind
   # to it; SERVER_PORT still wins if you set it explicitly (e.g. locally).
   port: ${SERVER_PORT:${PORT:8080}}
+  # Behind Render's proxy, Spring otherwise sees an internal http://
+  # request; this makes HttpServletRequest reflect the real https:// URL
+  # Twilio called, which its webhook signature is computed against.
+  forward-headers-strategy: framework
 
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
@@ -67,14 +71,16 @@ jwt:
 worker:
   api-key: ${INTERNAL_API_KEY}
 
-# Optional until a real WhatsApp Business Account is configured — defaults
-# let the app boot and the webhook verify-handshake respond even with no
-# real credentials; actual message/media calls will just fail (logged).
-whatsapp:
-  verify-token: ${WHATSAPP_VERIFY_TOKEN:dev_verify_token_change_me}
-  access-token: ${WHATSAPP_ACCESS_TOKEN:}
-  phone-number-id: ${WHATSAPP_PHONE_NUMBER_ID:}
-  api-url: ${WHATSAPP_API_URL:https://graph.facebook.com/v20.0}
+# Optional until a real Twilio WhatsApp sender is configured — defaults let
+# the app boot with no real credentials; actual message/media calls will
+# just fail (logged). webhook-validation-enabled should stay true in any
+# environment Twilio can actually reach; only disable for local testing
+# with curl, where there's no real X-Twilio-Signature to check.
+twilio:
+  account-sid: ${TWILIO_ACCOUNT_SID:}
+  auth-token: ${TWILIO_AUTH_TOKEN:}
+  whatsapp-number: ${TWILIO_WHATSAPP_NUMBER:whatsapp:+14155238886}
+  webhook-validation-enabled: ${TWILIO_WEBHOOK_VALIDATION_ENABLED:true}
 
 # Optional until a real inbound-email provider (e.g. SendGrid Inbound
 # Parse) is configured with MX records for this domain — defaults let the
