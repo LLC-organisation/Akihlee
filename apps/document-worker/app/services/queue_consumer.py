@@ -49,6 +49,8 @@ class QueueConsumer:
                 port=settings.RABBITMQ_PORT,
                 login=settings.RABBITMQ_USERNAME,
                 password=settings.RABBITMQ_PASSWORD,
+                virtualhost=settings.RABBITMQ_VIRTUAL_HOST,
+                ssl=settings.RABBITMQ_SSL_ENABLED,
             )
 
             self.channel = await self.connection.channel()
