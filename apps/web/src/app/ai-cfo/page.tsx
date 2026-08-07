@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { getAuthToken, aiCfoApi } from '@/lib/api-client';
-import { AppHeader } from '@/components/AppHeader';
+import { AppSidebar } from '@/components/AppSidebar';
 
 type ChatMessage = {
   role: 'user' | 'assistant';
@@ -63,9 +63,8 @@ export default function AiCfoPage() {
   return (
     <div className="relative min-h-screen bg-white dark:bg-canvas flex flex-col">
       <div className="bg-glow" />
-      <div className="relative z-10 flex flex-col flex-1">
-        <AppHeader />
-
+      <AppSidebar />
+      <div className="relative z-10 flex flex-col flex-1 lg:pl-64">
         <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-8 sm:px-6 lg:px-8 flex flex-col">
           <div className="mb-4">
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">AI CFO</h1>

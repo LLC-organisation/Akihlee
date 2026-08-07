@@ -55,6 +55,13 @@ const config: Config = {
           DEFAULT: '#131b2e',
           raised: '#161f33',
         },
+        // Warm accent for the sidebar-nav dashboard layout (logo mark,
+        // featured stat tile, chart bars) — distinct from the amber used
+        // for "pending" status so the two don't get confused.
+        accent: {
+          DEFAULT: '#f97316',
+          dark: '#ea580c',
+        },
       },
       backgroundImage: {
         // Primary CTA gradient for dark mode (electric cyan/blue).

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { getAuthToken, tenantApi, authApi, Tenant } from '@/lib/api-client';
-import { AppHeader } from '@/components/AppHeader';
+import { AppSidebar } from '@/components/AppSidebar';
 import { getStoredTheme, setTheme, Theme } from '@/lib/theme';
 import { isAxiosError } from 'axios';
 
@@ -335,9 +335,8 @@ export default function SettingsPage() {
   return (
     <div className="relative min-h-screen bg-white dark:bg-canvas">
       <div className="bg-glow" />
-      <div className="relative z-10">
-        <AppHeader />
-
+      <AppSidebar />
+      <div className="relative z-10 lg:pl-64">
         <main className="max-w-3xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">Settings</h1>
 

@@ -57,6 +57,25 @@ public class WhatsAppService {
     }
 
     /**
+     * Sent once, right after a tenant links a number from Settings. Unlike
+     * the inbound-reply flow, this is business-initiated rather than a
+     * response to something the user just sent — Twilio only allows
+     * freeform text for that if the number has an active 24-hour session
+     * (e.g. they recently joined the Sandbox or messaged us), otherwise it
+     * rejects the send (error 63016) until an approved Content Template is
+     * configured. sendMessage() already logs failures instead of throwing,
+     * so a rejected welcome message won't break the connect flow — it just
+     * silently won't arrive. Worth revisiting with a Content Template once
+     * this is on a real WhatsApp Business sender.
+     */
+    public void sendWelcomeMessage(String toPhoneDigitsOnly, String businessName) {
+        String displayNumber = fromWhatsAppNumber.replace("whatsapp:", "");
+        String text = "Welcome to Akihlee, " + businessName + "! This WhatsApp number is now connected to your account. "
+                + "Send a photo or PDF of a receipt or invoice to " + displayNumber + " any time and we'll process it automatically.";
+        sendMessage(toPhoneDigitsOnly, text);
+    }
+
+    /**
      * Best-effort confirmation/error reply — failures are logged, not
      * thrown, since a failed reply shouldn't fail document ingestion. This
      * is a freeform reply within an existing conversation (the user just

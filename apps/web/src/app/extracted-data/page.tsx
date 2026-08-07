@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { extractedDataApi, getAuthToken, ExtractedData } from '@/lib/api-client';
-import { AppHeader } from '@/components/AppHeader';
+import { AppSidebar } from '@/components/AppSidebar';
 
 const PAGE_SIZE = 10;
 
@@ -94,9 +94,8 @@ export default function ExtractedDataPage() {
   return (
     <div className="relative min-h-screen bg-white dark:bg-canvas">
       <div className="bg-glow" />
-      <div className="relative z-10">
-        <AppHeader />
-
+      <AppSidebar />
+      <div className="relative z-10 lg:pl-64">
         <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Extracted Data</h1>

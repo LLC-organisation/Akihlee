@@ -2,6 +2,7 @@ package com.akihlee.identity;
 
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -14,12 +15,15 @@ public class TenantController {
 
     private final TenantRepository tenantRepository;
     private final String inboundEmailDomain;
+    private final ApplicationEventPublisher eventPublisher;
 
     public TenantController(
             TenantRepository tenantRepository,
-            @Value("${email.inbound-domain}") String inboundEmailDomain) {
+            @Value("${email.inbound-domain}") String inboundEmailDomain,
+            ApplicationEventPublisher eventPublisher) {
         this.tenantRepository = tenantRepository;
         this.inboundEmailDomain = inboundEmailDomain;
+        this.eventPublisher = eventPublisher;
     }
 
     @GetMapping
@@ -59,6 +63,7 @@ public class TenantController {
         Tenant tenant = currentTenant();
         tenant.setWhatsappPhoneNumber(normalized);
         tenantRepository.save(tenant);
+        eventPublisher.publishEvent(new WhatsAppNumberConnectedEvent(normalized, tenant.getBusinessName()));
         return toResponse(tenant);
     }
 
