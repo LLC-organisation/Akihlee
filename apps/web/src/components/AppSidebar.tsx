@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { clearAuthToken } from '@/lib/api-client';
+import { clearAuthToken, getCurrentUserRole } from '@/lib/api-client';
 import { ThemeToggle } from './ThemeToggle';
 
 // /public/logo-icon.png is a cropped, icon-only version of the full
@@ -67,6 +67,15 @@ const NAV_LINKS = [
     ),
   },
   {
+    href: '/integrations',
+    label: 'Integrations',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+      </svg>
+    ),
+  },
+  {
     href: '/settings',
     label: 'Settings',
     icon: (
@@ -77,6 +86,16 @@ const NAV_LINKS = [
     ),
   },
 ] as const;
+
+const ADMIN_LINK = {
+  href: '/admin/audit-log',
+  label: 'Audit Log',
+  icon: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+} as const;
 
 function navLinkClasses(active: boolean): string {
   return `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors duration-200 ${
@@ -93,19 +112,33 @@ export function AppSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    setIsAdmin(getCurrentUserRole() === 'ADMIN');
+  }, []);
 
   const handleLogout = () => {
     clearAuthToken();
     router.push('/login');
   };
 
-  const navItems = (onNavigate?: () => void) =>
-    NAV_LINKS.map((link) => (
-      <Link key={link.href} href={link.href} onClick={onNavigate} className={navLinkClasses(pathname === link.href)}>
-        {link.icon}
-        {link.label}
-      </Link>
-    ));
+  const navItems = (onNavigate?: () => void) => (
+    <>
+      {NAV_LINKS.map((link) => (
+        <Link key={link.href} href={link.href} onClick={onNavigate} className={navLinkClasses(pathname === link.href)}>
+          {link.icon}
+          {link.label}
+        </Link>
+      ))}
+      {isAdmin && (
+        <Link href={ADMIN_LINK.href} onClick={onNavigate} className={navLinkClasses(pathname === ADMIN_LINK.href)}>
+          {ADMIN_LINK.icon}
+          {ADMIN_LINK.label}
+        </Link>
+      )}
+    </>
+  );
 
   return (
     <>

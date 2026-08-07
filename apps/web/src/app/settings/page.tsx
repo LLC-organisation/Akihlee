@@ -187,118 +187,6 @@ function ChangePasswordSection() {
   );
 }
 
-function WhatsAppSection({ tenant, onUpdated }: { tenant: Tenant; onUpdated: (t: Tenant) => void }) {
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
-  const handleConnect = async (e: FormEvent) => {
-    e.preventDefault();
-    setMessage(null);
-    setSaving(true);
-    try {
-      const updated = await tenantApi.connectWhatsApp(phoneNumber);
-      onUpdated(updated);
-      setPhoneNumber('');
-      setMessage({ type: 'success', text: 'WhatsApp number connected.' });
-    } catch (err) {
-      if (isAxiosError(err) && err.response?.status === 409) {
-        setMessage({ type: 'error', text: 'That number is already connected to another account.' });
-      } else {
-        setMessage({ type: 'error', text: 'Enter a valid phone number with country code (e.g. +254712345678).' });
-      }
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDisconnect = async () => {
-    setMessage(null);
-    setSaving(true);
-    try {
-      const updated = await tenantApi.disconnectWhatsApp();
-      onUpdated(updated);
-      setMessage({ type: 'success', text: 'WhatsApp number disconnected.' });
-    } catch {
-      setMessage({ type: 'error', text: 'Could not disconnect. Please try again.' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <SectionCard
-      title="WhatsApp Integration"
-      description="Connect a WhatsApp number so you can send receipts and invoices directly to Akihlee."
-    >
-      {message && <div className={message.type === 'success' ? successBanner : errorBanner}>{message.text}</div>}
-
-      {tenant.whatsappPhoneNumber ? (
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <p className="text-sm text-slate-600 dark:text-slate-300">
-            Connected: <span className="font-medium text-slate-900 dark:text-white">+{tenant.whatsappPhoneNumber}</span>
-          </p>
-          <button
-            onClick={handleDisconnect}
-            disabled={saving}
-            className="px-4 py-2 text-sm font-medium rounded-lg border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors duration-200"
-          >
-            {saving ? 'Disconnecting…' : 'Disconnect'}
-          </button>
-        </div>
-      ) : (
-        <form onSubmit={handleConnect} className="flex flex-col sm:flex-row gap-3">
-          <input
-            type="tel"
-            required
-            value={phoneNumber}
-            onChange={(e) => setPhoneNumber(e.target.value)}
-            placeholder="+254712345678"
-            className={`${inputClasses} sm:flex-1`}
-          />
-          <button type="submit" disabled={saving} className={primaryButtonClasses}>
-            {saving ? 'Connecting…' : 'Connect WhatsApp'}
-          </button>
-        </form>
-      )}
-    </SectionCard>
-  );
-}
-
-function EmailSection({ tenant }: { tenant: Tenant }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(tenant.inboundEmailAddress);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard API can fail (permissions, insecure context) — the
-      // address is still selectable/visible, so this is non-critical.
-    }
-  };
-
-  return (
-    <SectionCard
-      title="Email Integration"
-      description="Forward or CC receipts and invoices to this address — attachments are picked up automatically."
-    >
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <code className="flex-1 px-3 py-2.5 rounded-lg bg-slate-50 dark:bg-canvas border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white break-all">
-          {tenant.inboundEmailAddress}
-        </code>
-        <button
-          onClick={handleCopy}
-          className="px-4 py-2.5 text-sm font-medium rounded-lg border border-slate-200 dark:border-white/10 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 whitespace-nowrap transition-colors duration-200"
-        >
-          {copied ? 'Copied!' : 'Copy address'}
-        </button>
-      </div>
-    </SectionCard>
-  );
-}
-
 export default function SettingsPage() {
   const router = useRouter();
   const [checkedAuth, setCheckedAuth] = useState(false);
@@ -354,8 +242,6 @@ export default function SettingsPage() {
               <AppearanceSection />
               <ProfileSection tenant={tenant} onUpdated={setTenant} />
               <ChangePasswordSection />
-              <WhatsAppSection tenant={tenant} onUpdated={setTenant} />
-              <EmailSection tenant={tenant} />
             </div>
           )}
         </main>
