@@ -12,6 +12,25 @@ export const getAuthToken = (): string | null => {
   return window.localStorage.getItem(TOKEN_STORAGE_KEY);
 };
 
+/**
+ * Reads the "role" claim straight out of the JWT payload rather than
+ * storing it separately — the token is the single source of truth, so
+ * there's no risk of a stale copy surviving a role change or logout.
+ * Decoding a JWT payload is just base64url + JSON, no library needed.
+ */
+export const getCurrentUserRole = (): 'USER' | 'ADMIN' | null => {
+  const token = getAuthToken();
+  if (!token) return null;
+  try {
+    const payload = token.split('.')[1];
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const decoded = JSON.parse(atob(base64));
+    return decoded.role === 'ADMIN' ? 'ADMIN' : 'USER';
+  } catch {
+    return null;
+  }
+};
+
 export const setAuthToken = (token: string): void => {
   window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
 };
@@ -153,6 +172,14 @@ export type Page<T> = {
   size: number;
 };
 
+export type UpdateExtractedDataRequest = {
+  merchantName: string | null;
+  transactionDate: string | null; // ISO yyyy-MM-dd
+  totalAmount: number | null;
+  currency: string | null;
+  taxAmount: number | null;
+};
+
 export const extractedDataApi = {
   /**
    * Paginated, tenant-scoped view of everything the OCR pipeline has
@@ -161,6 +188,52 @@ export const extractedDataApi = {
   list: async (page: number, size: number): Promise<Page<ExtractedData>> => {
     const response = await apiClient.get<Page<ExtractedData>>('/extracted-data', {
       params: { page, size },
+    });
+    return response.data;
+  },
+
+  /**
+   * Corrects a field OCR got wrong (merchant, date, amounts, currency).
+   */
+  update: async (id: string, request: UpdateExtractedDataRequest): Promise<ExtractedData> => {
+    const response = await apiClient.put<ExtractedData>(`/extracted-data/${id}`, request);
+    return response.data;
+  },
+};
+
+export type AuditLogEntry = {
+  id: string;
+  tenantId: string | null;
+  tenantBusinessName: string | null;
+  actorUserId: string | null;
+  actorEmail: string | null;
+  action: string;
+  entityType: string | null;
+  entityId: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  detail: string | null;
+  createdAt: string;
+};
+
+export type AuditLogFilters = {
+  actorEmail?: string;
+  tenantId?: string;
+  action?: string;
+  from?: string; // ISO datetime
+  to?: string; // ISO datetime
+  page?: number;
+  size?: number;
+};
+
+export const adminAuditLogApi = {
+  /**
+   * Admin-only (see SecurityConfig's /api/v1/admin/** gate) — a non-admin
+   * JWT gets a 403 straight from Spring Security before this ever runs.
+   */
+  search: async (filters: AuditLogFilters): Promise<Page<AuditLogEntry>> => {
+    const response = await apiClient.get<Page<AuditLogEntry>>('/admin/audit-log', {
+      params: filters,
     });
     return response.data;
   },

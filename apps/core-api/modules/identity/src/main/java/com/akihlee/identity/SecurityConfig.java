@@ -63,6 +63,9 @@ public class SecurityConfig {
                         // Called directly by Meta/WhatsApp, which has no user JWT either;
                         // the verify-token handshake is its own auth mechanism.
                         .requestMatchers("/api/v1/webhooks/**").permitAll()
+                        // Audit log / admin tooling — gated on the "role" JWT claim
+                        // (see JwtAuthenticationFilter), not just "any logged-in user".
+                        .requestMatchers("/api/v1/admin/**").hasAuthority("ADMIN")
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();

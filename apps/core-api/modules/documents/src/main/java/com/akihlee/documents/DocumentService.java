@@ -1,10 +1,15 @@
 package com.akihlee.documents;
 
+import com.akihlee.identity.AuditAction;
+import com.akihlee.identity.AuditLogService;
 import com.akihlee.identity.TenantContext;
+import com.akihlee.identity.User;
+import com.akihlee.identity.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,16 +29,22 @@ public class DocumentService {
     private final StorageService storageService;
     private final RabbitTemplate rabbitTemplate;
     private final ObjectMapper objectMapper;
+    private final AuditLogService auditLogService;
+    private final UserRepository userRepository;
 
     public DocumentService(
             DocumentRepository documentRepository,
             StorageService storageService,
             RabbitTemplate rabbitTemplate,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            AuditLogService auditLogService,
+            UserRepository userRepository) {
         this.documentRepository = documentRepository;
         this.storageService = storageService;
         this.rabbitTemplate = rabbitTemplate;
         this.objectMapper = objectMapper;
+        this.auditLogService = auditLogService;
+        this.userRepository = userRepository;
     }
 
     /**
@@ -67,7 +78,30 @@ public class DocumentService {
         saved = documentRepository.save(saved);
         publishDocumentReceived(saved);
 
+        // actorUserId/Email are null for webhook-originated uploads (WhatsApp/
+        // email) — those requests never go through JwtAuthenticationFilter, so
+        // there's no authenticated user to attribute the upload to.
+        auditLogService.log(tenantId, currentUserId(), currentUserEmail(),
+                AuditAction.DOCUMENT_UPLOAD, "DOCUMENT", saved.getId().toString(), filename);
+
         return saved;
+    }
+
+    private UUID currentUserId() {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getName() == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(authentication.getName());
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private String currentUserEmail() {
+        UUID userId = currentUserId();
+        return userId != null ? userRepository.findById(userId).map(User::getEmail).orElse(null) : null;
     }
 
     private void publishDocumentReceived(Document document) {

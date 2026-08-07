@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -14,16 +15,22 @@ import java.util.UUID;
 public class TenantController {
 
     private final TenantRepository tenantRepository;
+    private final UserRepository userRepository;
     private final String inboundEmailDomain;
     private final ApplicationEventPublisher eventPublisher;
+    private final AuditLogService auditLogService;
 
     public TenantController(
             TenantRepository tenantRepository,
+            UserRepository userRepository,
             @Value("${email.inbound-domain}") String inboundEmailDomain,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            AuditLogService auditLogService) {
         this.tenantRepository = tenantRepository;
+        this.userRepository = userRepository;
         this.inboundEmailDomain = inboundEmailDomain;
         this.eventPublisher = eventPublisher;
+        this.auditLogService = auditLogService;
     }
 
     @GetMapping
@@ -64,6 +71,8 @@ public class TenantController {
         tenant.setWhatsappPhoneNumber(normalized);
         tenantRepository.save(tenant);
         eventPublisher.publishEvent(new WhatsAppNumberConnectedEvent(normalized, tenant.getBusinessName()));
+        auditLogService.log(tenant.getId(), currentUserId(), currentUserEmail(),
+                AuditAction.WHATSAPP_NUMBER_CONNECTED, "TENANT", tenant.getId().toString(), normalized);
         return toResponse(tenant);
     }
 
@@ -72,6 +81,8 @@ public class TenantController {
         Tenant tenant = currentTenant();
         tenant.setWhatsappPhoneNumber(null);
         tenantRepository.save(tenant);
+        auditLogService.log(tenant.getId(), currentUserId(), currentUserEmail(),
+                AuditAction.WHATSAPP_NUMBER_DISCONNECTED, "TENANT", tenant.getId().toString(), null);
         return toResponse(tenant);
     }
 
@@ -79,6 +90,14 @@ public class TenantController {
         UUID tenantId = TenantContext.getCurrentTenantId();
         return tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tenant not found"));
+    }
+
+    private UUID currentUserId() {
+        return UUID.fromString(SecurityContextHolder.getContext().getAuthentication().getName());
+    }
+
+    private String currentUserEmail() {
+        return userRepository.findById(currentUserId()).map(User::getEmail).orElse(null);
     }
 
     private TenantResponse toResponse(Tenant tenant) {

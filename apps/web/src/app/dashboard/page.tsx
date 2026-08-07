@@ -101,6 +101,7 @@ type StatTileProps = {
   icon: React.ReactNode;
   featured?: boolean;
   tone?: 'blue' | 'amber' | 'emerald' | 'red';
+  onClick?: () => void;
 };
 
 const TONE_CLASSES: Record<NonNullable<StatTileProps['tone']>, string> = {
@@ -110,10 +111,14 @@ const TONE_CLASSES: Record<NonNullable<StatTileProps['tone']>, string> = {
   red: 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400',
 };
 
-function StatTile({ label, value, hint, icon, featured, tone = 'blue' }: StatTileProps) {
+function StatTile({ label, value, hint, icon, featured, tone = 'blue', onClick }: StatTileProps) {
   if (featured) {
     return (
-      <div className="rounded-2xl bg-accent-dark p-4 flex flex-col justify-between text-white shadow-sm">
+      <button
+        type="button"
+        onClick={onClick}
+        className="rounded-2xl bg-accent-dark p-4 flex flex-col justify-between text-white shadow-sm text-left w-full hover:-translate-y-0.5 hover:shadow-md transition-all duration-200"
+      >
         <div className="flex items-start justify-between">
           <p className="text-sm font-medium text-white/80">{label}</p>
           <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/20">{icon}</span>
@@ -122,12 +127,16 @@ function StatTile({ label, value, hint, icon, featured, tone = 'blue' }: StatTil
           <p className="text-2xl font-bold mt-2">{value}</p>
           <p className="text-xs text-white/70 mt-1">{hint}</p>
         </div>
-      </div>
+      </button>
     );
   }
 
   return (
-    <div className={`${cardClasses} p-4 flex flex-col justify-between`}>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`${cardClasses} p-4 flex flex-col justify-between text-left w-full hover:-translate-y-0.5 hover:shadow-md`}
+    >
       <div className="flex items-start justify-between">
         <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{label}</p>
         <span className={`flex items-center justify-center w-8 h-8 rounded-lg ${TONE_CLASSES[tone]}`}>{icon}</span>
@@ -136,7 +145,7 @@ function StatTile({ label, value, hint, icon, featured, tone = 'blue' }: StatTil
         <p className="text-2xl font-bold text-slate-900 dark:text-white mt-2">{value}</p>
         <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{hint}</p>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -154,6 +163,8 @@ export default function Dashboard() {
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
+  const recentDocumentsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!getAuthToken()) {
@@ -222,9 +233,23 @@ export default function Dashboard() {
   };
 
   const filteredDocuments = useMemo(
-    () => documents.filter((d) => d.filename.toLowerCase().includes(search.toLowerCase())),
-    [documents, search]
+    () =>
+      documents.filter((d) => {
+        const matchesSearch = d.filename.toLowerCase().includes(search.toLowerCase());
+        const matchesStatus =
+          statusFilter === 'ALL' ||
+          (statusFilter === 'PENDING' && (d.status === 'PROCESSING' || d.status === 'REVIEW_REQUIRED')) ||
+          (statusFilter === 'APPROVED' && d.status === 'APPROVED') ||
+          (statusFilter === 'REJECTED' && d.status === 'REJECTED');
+        return matchesSearch && matchesStatus;
+      }),
+    [documents, search, statusFilter]
   );
+
+  const filterAndScrollToDocuments = (filter: typeof statusFilter) => {
+    setStatusFilter(filter);
+    recentDocumentsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   if (!checkedAuth) {
     return null;
@@ -328,6 +353,7 @@ export default function Dashboard() {
                 label="Total Documents"
                 value={documents.length}
                 hint={`${documentsThisMonth} uploaded this month`}
+                onClick={() => filterAndScrollToDocuments('ALL')}
                 icon={
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -339,6 +365,7 @@ export default function Dashboard() {
                 label="Pending Review"
                 value={pendingCount}
                 hint="Processing or needs attention"
+                onClick={() => filterAndScrollToDocuments('PENDING')}
                 icon={
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -350,6 +377,7 @@ export default function Dashboard() {
                 label="Approved"
                 value={approvedCount}
                 hint="Ready for your books"
+                onClick={() => filterAndScrollToDocuments('APPROVED')}
                 icon={
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -361,6 +389,7 @@ export default function Dashboard() {
                 label="Rejected"
                 value={rejectedCount}
                 hint="Needs correction"
+                onClick={() => filterAndScrollToDocuments('REJECTED')}
                 icon={
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -376,9 +405,23 @@ export default function Dashboard() {
           </div>
 
           {/* Recent Documents */}
-          <div className={`${cardClasses} p-6`}>
+          <div ref={recentDocumentsRef} className={`${cardClasses} p-6 scroll-mt-6`}>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-              <h2 className="text-base font-semibold text-slate-900 dark:text-white">Recent Documents</h2>
+              <div className="flex items-center gap-3 flex-wrap">
+                <h2 className="text-base font-semibold text-slate-900 dark:text-white">Recent Documents</h2>
+                {statusFilter !== 'ALL' && (
+                  <button
+                    type="button"
+                    onClick={() => setStatusFilter('ALL')}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors duration-200"
+                  >
+                    {statusFilter === 'PENDING' ? 'Pending Review' : statusFilter === 'APPROVED' ? 'Approved' : 'Rejected'}
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -421,7 +464,9 @@ export default function Dashboard() {
             )}
 
             {!loadingList && !listError && documents.length > 0 && filteredDocuments.length === 0 && (
-              <p className="text-slate-500 dark:text-slate-400 text-center py-8">No documents match &ldquo;{search}&rdquo;.</p>
+              <p className="text-slate-500 dark:text-slate-400 text-center py-8">
+                {search ? <>No documents match &ldquo;{search}&rdquo;.</> : 'No documents match this filter.'}
+              </p>
             )}
 
             {!loadingList && !listError && filteredDocuments.length > 0 && (

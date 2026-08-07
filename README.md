@@ -126,6 +126,7 @@ Key gotchas hit while setting this up (see `.env.example` for the full annotated
 - Supabase's pooler caps free-tier projects at a small total connection count shared across every connected instance — `HIKARI_MAX_POOL_SIZE` (default 5) keeps one instance from starving the others out.
 - CORS: `CORS_ALLOWED_ORIGINS` must include the deployed frontend's exact origin, or requests fail silently in the browser with no server-side error to grep for.
 - In a Vercel monorepo, **Root Directory** must be set explicitly (`apps/web`) or the build silently fails to find the Next.js app.
+- `document-worker` needs `RABBITMQ_SSL_ENABLED=true` and `RABBITMQ_VIRTUAL_HOST` (your CloudAMQP vhost, not `/`) set explicitly — without them it silently never connects (0 consumers on the queue, uploads stay stuck in `PROCESSING` forever) rather than erroring loudly.
 
 ## 🧪 Running Tests
 
@@ -201,6 +202,18 @@ Thread-local `TenantContext` makes the tenant ID available throughout the reques
 - `/api/v1/auth/register` and `/api/v1/auth/login` are the only public endpoints; everything else requires a valid JWT
 - Internal service-to-service calls (document-worker's extraction callback) use a separate shared API key, not a user JWT
 - CORS origins are explicit (`CORS_ALLOWED_ORIGINS`), not wildcarded
+
+### Admin Access & Audit Log
+
+Every login (success/failure), password change, document upload, OCR status change, extracted-data correction, and WhatsApp connect/disconnect is written to an `audit_log` table — denormalized at write time (actor email, tenant name) so the trail survives later account changes or deletions. `/admin/audit-log` in the app (backed by `GET /api/v1/admin/audit-log`) gives a searchable, cross-tenant view of it, for troubleshooting a specific user's actions or reconstructing a timeline during a security investigation.
+
+There's no self-service way to become an admin — every account is created with `role = USER`, and the only way to promote one is a direct database update:
+
+```sql
+UPDATE users SET role = 'ADMIN' WHERE email = 'you@business.com';
+```
+
+That user's *next* login issues a JWT with the `role: ADMIN` claim (existing sessions keep their old role until they re-login or the token expires — `jwt.expiration-ms`, 24h by default).
 
 ### Data Protection (Kenya DPA Compliance)
 

@@ -7,6 +7,10 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-validation")
+    // For reading the authenticated user off SecurityContextHolder when
+    // attributing an audit log entry (identity's copy isn't exposed
+    // transitively — Gradle's `implementation` visibility, not `api`)
+    implementation("org.springframework.boot:spring-boot-starter-security")
 
     // For file storage
     implementation("software.amazon.awssdk:s3:2.26.20")

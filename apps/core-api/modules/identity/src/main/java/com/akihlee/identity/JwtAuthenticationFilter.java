@@ -7,6 +7,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -41,8 +42,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 Claims claims = jwtService.parseClaims(header.substring(7));
                 UUID tenantId = UUID.fromString(claims.get("tenantId", String.class));
                 TenantContext.setCurrentTenantId(tenantId);
+                // Tokens issued before the role claim existed won't have one —
+                // default to USER rather than reject them outright, so those
+                // sessions just stay non-admin until they naturally expire.
+                String role = claims.get("role", String.class);
+                List<SimpleGrantedAuthority> authorities =
+                        List.of(new SimpleGrantedAuthority(role != null ? role : UserRole.USER.name()));
                 SecurityContextHolder.getContext().setAuthentication(
-                        new UsernamePasswordAuthenticationToken(claims.getSubject(), null, List.of()));
+                        new UsernamePasswordAuthenticationToken(claims.getSubject(), null, authorities));
             } catch (JwtException | IllegalArgumentException ignored) {
                 // Leave the request unauthenticated; protected routes will reject it with 401.
             }

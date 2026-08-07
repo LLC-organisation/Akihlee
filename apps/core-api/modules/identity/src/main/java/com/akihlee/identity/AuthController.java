@@ -17,16 +17,19 @@ public class AuthController {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final AuditLogService auditLogService;
 
     public AuthController(
             TenantRepository tenantRepository,
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
-            JwtService jwtService) {
+            JwtService jwtService,
+            AuditLogService auditLogService) {
         this.tenantRepository = tenantRepository;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.auditLogService = auditLogService;
     }
 
     /**
@@ -43,7 +46,8 @@ public class AuthController {
         User user = userRepository.save(new User(
                 tenant.getId(), request.email(), passwordEncoder.encode(request.password())));
 
-        String token = jwtService.generateToken(user.getId(), tenant.getId(), user.getEmail());
+        String token = jwtService.generateToken(user.getId(), tenant.getId(), user.getEmail(), user.getRole());
+        auditLogService.log(tenant.getId(), user.getId(), user.getEmail(), AuditAction.REGISTER);
         return new AuthResponse(token, tenant.getId(), user.getEmail(), tenant.getBusinessName());
     }
 
@@ -51,12 +55,16 @@ public class AuthController {
     public AuthResponse login(@Valid @RequestBody LoginRequest request) {
         User user = userRepository.findByEmail(request.email())
                 .filter(u -> passwordEncoder.matches(request.password(), u.getPasswordHash()))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password"));
+                .orElseGet(() -> {
+                    auditLogService.log(null, null, request.email(), AuditAction.LOGIN_FAILURE);
+                    throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
+                });
 
         Tenant tenant = tenantRepository.findById(user.getTenantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Tenant not found"));
 
-        String token = jwtService.generateToken(user.getId(), tenant.getId(), user.getEmail());
+        String token = jwtService.generateToken(user.getId(), tenant.getId(), user.getEmail(), user.getRole());
+        auditLogService.log(tenant.getId(), user.getId(), user.getEmail(), AuditAction.LOGIN_SUCCESS);
         return new AuthResponse(token, tenant.getId(), user.getEmail(), tenant.getBusinessName());
     }
 
@@ -71,10 +79,12 @@ public class AuthController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
 
         if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
+            auditLogService.log(user.getTenantId(), user.getId(), user.getEmail(), AuditAction.PASSWORD_CHANGE_FAILURE);
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Current password is incorrect");
         }
 
         user.changePassword(passwordEncoder.encode(request.newPassword()));
         userRepository.save(user);
+        auditLogService.log(user.getTenantId(), user.getId(), user.getEmail(), AuditAction.PASSWORD_CHANGE);
     }
 }

@@ -29,6 +29,10 @@ public class User {
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private UserRole role = UserRole.USER;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -61,6 +65,10 @@ public class User {
 
     public String getPasswordHash() {
         return passwordHash;
+    }
+
+    public UserRole getRole() {
+        return role;
     }
 
     public Instant getCreatedAt() {

@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { extractedDataApi, getAuthToken, ExtractedData } from '@/lib/api-client';
+import { extractedDataApi, getAuthToken, ExtractedData, UpdateExtractedDataRequest } from '@/lib/api-client';
 import { AppSidebar } from '@/components/AppSidebar';
 
 const PAGE_SIZE = 10;
 
 const cardClasses = 'bg-white dark:bg-surface border border-slate-200 dark:border-white/10 rounded-2xl shadow-sm dark:shadow-none transition-all duration-200';
 const primaryButtonClasses = 'inline-flex items-center justify-center gap-2 bg-accent-gradient text-white text-sm font-medium rounded-lg px-4 py-2.5 hover:opacity-90 hover:shadow-md hover:shadow-blue-500/20 transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none';
+const editInputClasses = 'w-full rounded-md border border-blue-400 dark:border-blue-500 bg-white dark:bg-canvas px-2 py-1 text-sm text-slate-900 dark:text-white focus:outline-none';
 
 function formatAmount(amount: number | null, currency: string | null): string {
   if (amount === null) return '—';
@@ -47,6 +48,8 @@ function ConfidenceBadge({ confidence }: { confidence: number }) {
   );
 }
 
+type EditingCell = { rowId: string; field: 'merchant' | 'date' | 'amount' } | null;
+
 export default function ExtractedDataPage() {
   const router = useRouter();
   const [checkedAuth, setCheckedAuth] = useState(false);
@@ -56,6 +59,12 @@ export default function ExtractedDataPage() {
   const [totalElements, setTotalElements] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [editing, setEditing] = useState<EditingCell>(null);
+  const [draftValue, setDraftValue] = useState('');
+  const [draftCurrency, setDraftCurrency] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!getAuthToken()) {
@@ -87,6 +96,60 @@ export default function ExtractedDataPage() {
     }
   }, [checkedAuth, load]);
 
+  const startEdit = (row: ExtractedData, field: NonNullable<EditingCell>['field']) => {
+    setSaveError(null);
+    setEditing({ rowId: row.id, field });
+    if (field === 'merchant') setDraftValue(row.merchantName ?? '');
+    if (field === 'date') setDraftValue(row.transactionDate ?? '');
+    if (field === 'amount') {
+      setDraftValue(row.totalAmount !== null ? String(row.totalAmount) : '');
+      setDraftCurrency(row.currency ?? '');
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditing(null);
+    setSaveError(null);
+  };
+
+  const commitEdit = async (row: ExtractedData) => {
+    if (!editing) return;
+
+    if (editing.field === 'amount' && draftValue.trim() && Number.isNaN(Number(draftValue))) {
+      setSaveError('Enter a valid number');
+      return;
+    }
+
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const payload: UpdateExtractedDataRequest = {
+        merchantName: editing.field === 'merchant' ? draftValue.trim() || null : row.merchantName,
+        transactionDate: editing.field === 'date' ? draftValue || null : row.transactionDate,
+        totalAmount: editing.field === 'amount' ? (draftValue.trim() ? Number(draftValue) : null) : row.totalAmount,
+        currency: editing.field === 'amount' ? draftCurrency.trim() || null : row.currency,
+        taxAmount: row.taxAmount,
+      };
+      const updated = await extractedDataApi.update(row.id, payload);
+      setRows((prev) => prev.map((r) => (r.id === row.id ? updated : r)));
+      setEditing(null);
+    } catch {
+      setSaveError('Could not save. Try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent, row: ExtractedData) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commitEdit(row);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelEdit();
+    }
+  };
+
   if (!checkedAuth) {
     return null;
   }
@@ -101,7 +164,8 @@ export default function ExtractedDataPage() {
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Extracted Data</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
               Structured fields the OCR pipeline pulled from your uploaded receipts and invoices —
-              this is what powers the AI CFO features.
+              this is what powers the AI CFO features. Click merchant, date, or amount to fix
+              anything OCR got wrong.
             </p>
           </div>
 
@@ -140,28 +204,112 @@ export default function ExtractedDataPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                      {rows.map((row) => (
-                        <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors duration-200">
-                          <td className="px-4 py-3 text-sm text-slate-900 dark:text-white font-medium whitespace-nowrap max-w-[200px] truncate">
-                            {row.filename}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">
-                            {row.merchantName ?? '—'}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">
-                            {formatDate(row.transactionDate)}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-slate-900 dark:text-white text-right whitespace-nowrap">
-                            {formatAmount(row.totalAmount, row.currency)}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 text-right whitespace-nowrap">
-                            {lineItemCount(row.lineItemsJson)}
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <ConfidenceBadge confidence={row.confidence} />
-                          </td>
-                        </tr>
-                      ))}
+                      {rows.map((row) => {
+                        const isEditingMerchant = editing?.rowId === row.id && editing.field === 'merchant';
+                        const isEditingDate = editing?.rowId === row.id && editing.field === 'date';
+                        const isEditingAmount = editing?.rowId === row.id && editing.field === 'amount';
+                        const rowHasError = editing?.rowId === row.id && saveError;
+
+                        return (
+                          <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors duration-200">
+                            <td className="px-4 py-3 text-sm text-slate-900 dark:text-white font-medium whitespace-nowrap max-w-[200px] truncate">
+                              {row.filename}
+                            </td>
+
+                            <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                              {isEditingMerchant ? (
+                                <input
+                                  autoFocus
+                                  type="text"
+                                  value={draftValue}
+                                  onChange={(e) => setDraftValue(e.target.value)}
+                                  onBlur={() => commitEdit(row)}
+                                  onKeyDown={(e) => handleKeyDown(e, row)}
+                                  disabled={saving}
+                                  className={editInputClasses}
+                                />
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => startEdit(row, 'merchant')}
+                                  className="text-left hover:underline decoration-dashed underline-offset-2 decoration-slate-400"
+                                >
+                                  {row.merchantName ?? '—'}
+                                </button>
+                              )}
+                            </td>
+
+                            <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                              {isEditingDate ? (
+                                <input
+                                  autoFocus
+                                  type="date"
+                                  value={draftValue}
+                                  onChange={(e) => setDraftValue(e.target.value)}
+                                  onBlur={() => commitEdit(row)}
+                                  onKeyDown={(e) => handleKeyDown(e, row)}
+                                  disabled={saving}
+                                  className={editInputClasses}
+                                />
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => startEdit(row, 'date')}
+                                  className="text-left hover:underline decoration-dashed underline-offset-2 decoration-slate-400"
+                                >
+                                  {formatDate(row.transactionDate)}
+                                </button>
+                              )}
+                            </td>
+
+                            <td className="px-4 py-3 text-sm text-slate-900 dark:text-white text-right whitespace-nowrap">
+                              {isEditingAmount ? (
+                                <div className="flex items-center gap-1 justify-end">
+                                  <input
+                                    autoFocus
+                                    type="text"
+                                    value={draftCurrency}
+                                    onChange={(e) => setDraftCurrency(e.target.value)}
+                                    onBlur={() => commitEdit(row)}
+                                    onKeyDown={(e) => handleKeyDown(e, row)}
+                                    disabled={saving}
+                                    placeholder="KES"
+                                    className={`${editInputClasses} w-16`}
+                                  />
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={draftValue}
+                                    onChange={(e) => setDraftValue(e.target.value)}
+                                    onBlur={() => commitEdit(row)}
+                                    onKeyDown={(e) => handleKeyDown(e, row)}
+                                    disabled={saving}
+                                    className={`${editInputClasses} w-24 text-right`}
+                                  />
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => startEdit(row, 'amount')}
+                                  className="hover:underline decoration-dashed underline-offset-2 decoration-slate-400"
+                                >
+                                  {formatAmount(row.totalAmount, row.currency)}
+                                </button>
+                              )}
+                              {rowHasError && (
+                                <p className="text-xs text-red-600 dark:text-red-400 mt-1">{saveError}</p>
+                              )}
+                            </td>
+
+                            <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 text-right whitespace-nowrap">
+                              {lineItemCount(row.lineItemsJson)}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <ConfidenceBadge confidence={row.confidence} />
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
