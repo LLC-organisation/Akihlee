@@ -1,0 +1,88 @@
+substitutions:
+  _AR_HOSTNAME: europe-west1-docker.pkg.dev
+  _AR_PROJECT_ID: hallowed-index-504918-b4
+  _AR_REPOSITORY: cloud-run-source-deploy
+  REPO_NAME: llc-organisation-akihlee
+  _SERVICE_NAME: akihlee-api
+  _DEPLOY_REGION: europe-west1
+
+  # Plain (non-secret) runtime config — set these as substitution
+  # variables on the Cloud Build trigger (Console: trigger > Edit >
+  # Substitution variables, or `gcloud builds triggers update
+  # --substitutions=...`). Defaults below are dev-safe fallbacks only.
+  _CORS_ALLOWED_ORIGINS: http://localhost:3000
+  _APP_WEB_URL: http://localhost:3000
+  _DATABASE_URL: ''
+  _DATABASE_USERNAME: ''
+  _RABBITMQ_HOST: ''
+  _RABBITMQ_PORT: '5671'
+  _RABBITMQ_USERNAME: ''
+  _RABBITMQ_VIRTUAL_HOST: '/'
+  _RABBITMQ_SSL_ENABLED: 'true'
+  _S3_ENDPOINT: ''
+  _S3_ACCESS_KEY: ''
+  _S3_BUCKET_DOCUMENTS: ''
+  _SQUARE_ENVIRONMENT: sandbox
+  _SQUARE_OAUTH_CLIENT_ID: ''
+  _SQUARE_OAUTH_REDIRECT_URI: ''
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  substitutionOption: ALLOW_LOOSE
+
+steps:
+  - id: Pull
+    name: gcr.io/cloud-builders/docker
+    entrypoint: /bin/bash
+    args:
+      - -c
+      - docker pull $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:latest || exit 0
+
+  - id: Build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --cache-from
+      - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:latest
+      - -t
+      - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+      - -t
+      - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:latest
+      - apps/core-api
+      - -f
+      - apps/core-api/Dockerfile
+
+  - id: Push
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - --all-tags
+      - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME
+
+  # --set-env-vars / --set-secrets fully REPLACE the revision's env config
+  # each deploy (not merge) — every variable the app needs has to be
+  # listed here, in one of the two lists, every time. That's deliberate:
+  # config lives in git and Secret Manager, not in one-off Console edits
+  # that the next automated deploy would silently discard (exactly what
+  # produced the JWT_SECRET crash this replaces).
+  - id: Deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - $_SERVICE_NAME
+      - --image=$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+      - --region=$_DEPLOY_REGION
+      - --platform=managed
+      - --allow-unauthenticated
+      - --cpu-boost
+      - --memory=1Gi
+      - --cpu=1
+      - --update-labels=managed-by=gcp-cloud-build-deploy-cloud-run,gcb-trigger-id=$_TRIGGER_ID,gcb-trigger-region=$LOCATION,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID
+      - --set-env-vars=CORS_ALLOWED_ORIGINS=$_CORS_ALLOWED_ORIGINS,APP_WEB_URL=$_APP_WEB_URL,DATABASE_URL=$_DATABASE_URL,DATABASE_USERNAME=$_DATABASE_USERNAME,RABBITMQ_HOST=$_RABBITMQ_HOST,RABBITMQ_PORT=$_RABBITMQ_PORT,RABBITMQ_USERNAME=$_RABBITMQ_USERNAME,RABBITMQ_VIRTUAL_HOST=$_RABBITMQ_VIRTUAL_HOST,RABBITMQ_SSL_ENABLED=$_RABBITMQ_SSL_ENABLED,S3_ENDPOINT=$_S3_ENDPOINT,S3_ACCESS_KEY=$_S3_ACCESS_KEY,S3_BUCKET_DOCUMENTS=$_S3_BUCKET_DOCUMENTS,SQUARE_ENVIRONMENT=$_SQUARE_ENVIRONMENT,SQUARE_OAUTH_CLIENT_ID=$_SQUARE_OAUTH_CLIENT_ID,SQUARE_OAUTH_REDIRECT_URI=$_SQUARE_OAUTH_REDIRECT_URI
+      - --set-secrets=JWT_SECRET=JWT_SECRET:latest,DATABASE_PASSWORD=DATABASE_PASSWORD:latest,RABBITMQ_PASSWORD=RABBITMQ_PASSWORD:latest,S3_SECRET_KEY=S3_SECRET_KEY:latest,INTERNAL_API_KEY=INTERNAL_API_KEY:latest,SQUARE_OAUTH_CLIENT_SECRET=SQUARE_OAUTH_CLIENT_SECRET:latest,SQUARE_ACCESS_TOKEN=SQUARE_ACCESS_TOKEN:latest
+      - --quiet
+
+images:
+  - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME
