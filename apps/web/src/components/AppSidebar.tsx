@@ -49,6 +49,19 @@ const NAV_LINKS = [
     ),
   },
   {
+    href: '/documents',
+    label: 'Documents',
+    // Only nav entry with a child dynamic route (/documents/[id]) — needs a
+    // prefix match to stay highlighted there, unlike every other entry.
+    matchPrefix: true,
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5A2.25 2.25 0 015.25 5.25h13.5A2.25 2.25 0 0121 7.5v9a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 16.5v-9z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 9h18" />
+      </svg>
+    ),
+  },
+  {
     href: '/extracted-data',
     label: 'Extracted Data',
     icon: (
@@ -125,12 +138,17 @@ export function AppSidebar() {
 
   const navItems = (onNavigate?: () => void) => (
     <>
-      {NAV_LINKS.map((link) => (
-        <Link key={link.href} href={link.href} onClick={onNavigate} className={navLinkClasses(pathname === link.href)}>
-          {link.icon}
-          {link.label}
-        </Link>
-      ))}
+      {NAV_LINKS.map((link) => {
+        const active = 'matchPrefix' in link && link.matchPrefix
+          ? pathname === link.href || pathname.startsWith(`${link.href}/`)
+          : pathname === link.href;
+        return (
+          <Link key={link.href} href={link.href} onClick={onNavigate} className={navLinkClasses(active)}>
+            {link.icon}
+            {link.label}
+          </Link>
+        );
+      })}
       {isAdmin && (
         <Link href={ADMIN_LINK.href} onClick={onNavigate} className={navLinkClasses(pathname === ADMIN_LINK.href)}>
           {ADMIN_LINK.icon}
@@ -156,7 +174,7 @@ export function AppSidebar() {
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
             </svg>
-            akihlee.com
+           Our Landing Page 
           </a>
           <div className="px-1 py-1">
             <ThemeToggle />

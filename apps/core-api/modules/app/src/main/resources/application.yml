@@ -88,3 +88,10 @@ twilio:
 email:
   inbound-domain: ${EMAIL_INBOUND_DOMAIN:receipts.akihlee.com}
   webhook-secret: ${EMAIL_WEBHOOK_SECRET:dev_email_webhook_secret_change_me}
+
+# Optional until a Square access token is configured — defaults let the app
+# boot with no real credentials; sync requests will fail cleanly (see
+# SquareIntegrationController) rather than crashing the app at startup.
+square:
+  access-token: ${SQUARE_ACCESS_TOKEN:}
+  environment: ${SQUARE_ENVIRONMENT:sandbox}

@@ -9,12 +9,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -25,7 +29,11 @@ public class DocumentService {
 
     private static final Logger log = LoggerFactory.getLogger(DocumentService.class);
 
+    private static final Set<Document.DocumentStatus> REVIEWABLE_STATUSES =
+            EnumSet.of(Document.DocumentStatus.EXTRACTED, Document.DocumentStatus.REVIEW_REQUIRED);
+
     private final DocumentRepository documentRepository;
+    private final ExtractedDataRepository extractedDataRepository;
     private final StorageService storageService;
     private final RabbitTemplate rabbitTemplate;
     private final ObjectMapper objectMapper;
@@ -34,12 +42,14 @@ public class DocumentService {
 
     public DocumentService(
             DocumentRepository documentRepository,
+            ExtractedDataRepository extractedDataRepository,
             StorageService storageService,
             RabbitTemplate rabbitTemplate,
             ObjectMapper objectMapper,
             AuditLogService auditLogService,
             UserRepository userRepository) {
         this.documentRepository = documentRepository;
+        this.extractedDataRepository = extractedDataRepository;
         this.storageService = storageService;
         this.rabbitTemplate = rabbitTemplate;
         this.objectMapper = objectMapper;
@@ -53,6 +63,11 @@ public class DocumentService {
      */
     @Transactional
     public Document uploadDocument(String filename, byte[] content, String contentType) {
+        return uploadDocument(filename, content, contentType, Document.DocumentSource.UPLOAD);
+    }
+
+    @Transactional
+    public Document uploadDocument(String filename, byte[] content, String contentType, Document.DocumentSource source) {
         UUID tenantId = TenantContext.getCurrentTenantId();
 
         // Calculate checksum for deduplication
@@ -69,7 +84,8 @@ public class DocumentService {
             storageKey,
             contentType,
             (long) content.length,
-            checksum
+            checksum,
+            source
         );
 
         Document saved = documentRepository.save(document);
@@ -85,6 +101,78 @@ public class DocumentService {
                 AuditAction.DOCUMENT_UPLOAD, "DOCUMENT", saved.getId().toString(), filename);
 
         return saved;
+    }
+
+    /**
+     * Seeds a Document + ExtractedData pair directly from already-structured
+     * data (e.g. a Square payment), skipping storage and the OCR queue
+     * entirely — there's no real file behind it.
+     */
+    @Transactional
+    public Document createFromExternalData(UUID tenantId, Document.DocumentSource source,
+                                            String syntheticFilename, ExternalDataSeed seed) {
+        Document document = new Document(
+                tenantId,
+                syntheticFilename,
+                "external:" + source + ":" + UUID.randomUUID(),
+                "application/x-external-record",
+                0L,
+                "n/a",
+                source
+        );
+        document.updateStatus(Document.DocumentStatus.EXTRACTED);
+        Document saved = documentRepository.save(document);
+
+        ExtractedData data = new ExtractedData(saved.getId(), tenantId, syntheticFilename);
+        data.setMerchantName(seed.merchantName());
+        data.setTransactionDate(seed.transactionDate());
+        data.setTotalAmount(seed.totalAmount());
+        data.setCurrency(seed.currency());
+        data.setLineItemsJson("[]");
+        data.setConfidence(1.0);
+        extractedDataRepository.save(data);
+
+        auditLogService.log(tenantId, currentUserId(), currentUserEmail(),
+                AuditAction.DOCUMENT_IMPORTED, "DOCUMENT", saved.getId().toString(), syntheticFilename);
+
+        return saved;
+    }
+
+    /**
+     * Approves a document that's finished extraction and passed review.
+     * Rejects (409) a stale/replayed request against a document that either
+     * hasn't been extracted yet or is already in a terminal state.
+     */
+    @Transactional
+    public Optional<Document> approve(UUID id) {
+        return transitionAfterReview(id, Document.DocumentStatus.APPROVED, AuditAction.DOCUMENT_APPROVED, null);
+    }
+
+    @Transactional
+    public Optional<Document> reject(UUID id, String reason) {
+        return transitionAfterReview(id, Document.DocumentStatus.REJECTED, AuditAction.DOCUMENT_REJECTED, reason);
+    }
+
+    private Optional<Document> transitionAfterReview(UUID id, Document.DocumentStatus newStatus, String action, String reason) {
+        UUID tenantId = TenantContext.getCurrentTenantId();
+        Optional<Document> found = documentRepository.findByIdAndTenantId(id, tenantId);
+        if (found.isEmpty()) {
+            return Optional.empty();
+        }
+
+        Document document = found.get();
+        if (!REVIEWABLE_STATUSES.contains(document.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Document must be extracted and pending review before it can be " + newStatus.name().toLowerCase());
+        }
+
+        document.updateStatus(newStatus);
+        Document saved = documentRepository.save(document);
+
+        auditLogService.log(tenantId, currentUserId(), currentUserEmail(),
+                action, "DOCUMENT", saved.getId().toString(), reason);
+
+        return Optional.of(saved);
     }
 
     private UUID currentUserId() {

@@ -61,6 +61,14 @@ public class SquareTransaction {
     private String description;
 
     /**
+     * The reviewable Document (+ ExtractedData) this payment was bridged
+     * into, once imported. Null only transiently between the transaction
+     * save and the bridge step within the same sync transaction.
+     */
+    @Column(name = "document_id")
+    private UUID documentId;
+
+    /**
      * When the transaction occurred in Square.
      */
     @Column(nullable = false)
@@ -138,6 +146,10 @@ public class SquareTransaction {
         return description;
     }
 
+    public UUID getDocumentId() {
+        return documentId;
+    }
+
     public Instant getTransactionDate() {
         return transactionDate;
     }
@@ -161,6 +173,10 @@ public class SquareTransaction {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public void setDocumentId(UUID documentId) {
+        this.documentId = documentId;
     }
 
     public void markAsReconciled() {

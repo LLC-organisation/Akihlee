@@ -121,7 +121,7 @@ public class WhatsAppWebhookController {
 
         TenantContext.setCurrentTenantId(tenant.getId());
         try {
-            documentService.uploadDocument(filename, content, mimeType);
+            documentService.uploadDocument(filename, content, mimeType, Document.DocumentSource.WHATSAPP);
             whatsAppService.sendMessage(fromPhone, "Got it! Processing your receipt now.");
         } finally {
             TenantContext.clear();

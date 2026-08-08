@@ -45,6 +45,10 @@ public class Document {
     @Column(nullable = false)
     private DocumentStatus status = DocumentStatus.UPLOADED;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private DocumentSource source;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -56,13 +60,14 @@ public class Document {
     }
 
     public Document(UUID tenantId, String filename, String storageKey,
-                    String contentType, Long sizeBytes, String checksum) {
+                    String contentType, Long sizeBytes, String checksum, DocumentSource source) {
         this.tenantId = tenantId;
         this.filename = filename;
         this.storageKey = storageKey;
         this.contentType = contentType;
         this.sizeBytes = sizeBytes;
         this.checksum = checksum;
+        this.source = source;
         this.createdAt = Instant.now();
         this.updatedAt = Instant.now();
     }
@@ -105,6 +110,10 @@ public class Document {
         return status;
     }
 
+    public DocumentSource getSource() {
+        return source;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }
@@ -125,5 +134,12 @@ public class Document {
         REVIEW_REQUIRED,
         APPROVED,
         REJECTED
+    }
+
+    public enum DocumentSource {
+        UPLOAD,
+        EMAIL,
+        WHATSAPP,
+        SQUARE
     }
 }

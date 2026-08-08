@@ -105,7 +105,8 @@ public class EmailWebhookController {
                 if (file.isEmpty() || !ALLOWED_CONTENT_TYPES.contains(file.getContentType())) {
                     continue;
                 }
-                documentService.uploadDocument(file.getOriginalFilename(), file.getBytes(), file.getContentType());
+                documentService.uploadDocument(file.getOriginalFilename(), file.getBytes(), file.getContentType(),
+                        Document.DocumentSource.EMAIL);
             }
         } finally {
             TenantContext.clear();

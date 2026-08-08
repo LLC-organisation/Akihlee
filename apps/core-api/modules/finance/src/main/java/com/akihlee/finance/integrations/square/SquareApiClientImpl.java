@@ -3,7 +3,6 @@ package com.akihlee.finance.integrations.square;
 import com.squareup.square.SquareClient;
 import com.squareup.square.api.PaymentsApi;
 import com.squareup.square.exceptions.ApiException;
-import com.squareup.square.models.ListPaymentsRequest;
 import com.squareup.square.models.ListPaymentsResponse;
 import com.squareup.square.models.Payment;
 import org.slf4j.Logger;
@@ -42,24 +41,21 @@ public class SquareApiClientImpl implements SquareApiClient {
         List<Payment> allPayments = new ArrayList<>();
 
         try {
-            // Build request
-            ListPaymentsRequest.Builder requestBuilder = new ListPaymentsRequest.Builder()
-                .beginTime(startDate.toString())
-                .endTime(endDate.toString())
-                .sortOrder("ASC");
-
-            if (locationId != null) {
-                requestBuilder.locationId(locationId);
-            }
-
-            // Square API uses pagination
+            // listPayments takes positional query params in this SDK version
+            // (beginTime, endTime, sortOrder, cursor, locationId, total,
+            // last4, cardBrand, limit) rather than a request-object builder.
             String cursor = null;
             do {
-                if (cursor != null) {
-                    requestBuilder.cursor(cursor);
-                }
-
-                ListPaymentsResponse response = paymentsApi.listPayments(requestBuilder.build());
+                ListPaymentsResponse response = paymentsApi.listPayments(
+                        startDate.toString(),
+                        endDate.toString(),
+                        "ASC",
+                        cursor,
+                        locationId,
+                        null,
+                        null,
+                        null,
+                        null);
 
                 if (response.getPayments() != null) {
                     allPayments.addAll(response.getPayments());

@@ -5,6 +5,7 @@ plugins {
 dependencies {
     implementation(project(":modules:identity"))
     implementation(project(":modules:documents"))
+    implementation(project(":modules:finance"))
 
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")

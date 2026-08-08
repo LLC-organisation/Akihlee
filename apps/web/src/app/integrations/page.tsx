@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { getAuthToken, tenantApi, Tenant } from '@/lib/api-client';
+import { getAuthToken, tenantApi, integrationsApi, Tenant } from '@/lib/api-client';
 import { AppSidebar } from '@/components/AppSidebar';
 import { isAxiosError } from 'axios';
 
@@ -138,15 +138,40 @@ function EmailSection({ tenant }: { tenant: Tenant }) {
 }
 
 function SquareSection() {
+  const [syncing, setSyncing] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const handleSync = async () => {
+    setMessage(null);
+    setSyncing(true);
+    try {
+      const result = await integrationsApi.syncSquare();
+      setMessage({
+        type: 'success',
+        text: result.imported === 0
+          ? 'Synced — no new transactions in the last 30 days.'
+          : `Synced ${result.imported} new transaction${result.imported === 1 ? '' : 's'} from Square. Check Documents to review them.`,
+      });
+    } catch (err) {
+      const notConfigured = isAxiosError(err) && err.response?.status === 400;
+      setMessage({
+        type: 'error',
+        text: notConfigured
+          ? (err.response?.data as { error?: string } | undefined)?.error ?? 'Square is not configured.'
+          : 'Could not sync with Square. Please try again.',
+      });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
-    <SectionCard title="Square" description="Sync transactions from your Square POS automatically.">
+    <SectionCard title="Square" description="Sync payments from your Square POS into Documents for review.">
+      {message && <div className={message.type === 'success' ? successBanner : errorBanner}>{message.text}</div>}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <p className="text-sm text-slate-500 dark:text-slate-400">Coming soon.</p>
-        <button
-          disabled
-          className="px-4 py-2 text-sm font-medium rounded-lg border border-slate-200 dark:border-white/10 text-slate-400 dark:text-slate-500 cursor-not-allowed"
-        >
-          Connect Square
+        <p className="text-sm text-slate-500 dark:text-slate-400">Pulls the last 30 days of payments each time.</p>
+        <button onClick={handleSync} disabled={syncing} className={primaryButtonClasses}>
+          {syncing ? 'Syncing…' : 'Sync now'}
         </button>
       </div>
     </SectionCard>

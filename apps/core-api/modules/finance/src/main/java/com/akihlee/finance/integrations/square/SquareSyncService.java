@@ -1,5 +1,8 @@
 package com.akihlee.finance.integrations.square;
 
+import com.akihlee.documents.Document;
+import com.akihlee.documents.DocumentService;
+import com.akihlee.documents.ExternalDataSeed;
 import com.akihlee.identity.TenantContext;
 import com.squareup.square.models.Payment;
 import org.slf4j.Logger;
@@ -9,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -24,11 +28,14 @@ public class SquareSyncService {
 
     private final SquareApiClient squareApiClient;
     private final SquareTransactionRepository transactionRepository;
+    private final DocumentService documentService;
 
     public SquareSyncService(SquareApiClient squareApiClient,
-                             SquareTransactionRepository transactionRepository) {
+                             SquareTransactionRepository transactionRepository,
+                             DocumentService documentService) {
         this.squareApiClient = squareApiClient;
         this.transactionRepository = transactionRepository;
+        this.documentService = documentService;
     }
 
     /**
@@ -74,6 +81,21 @@ public class SquareSyncService {
 
         // Convert Square payment to our model
         SquareTransaction transaction = mapPaymentToTransaction(tenantId, payment);
+        transactionRepository.save(transaction);
+
+        // Bridge into the same reviewable Document/ExtractedData pipeline as
+        // uploaded/emailed/WhatsApp receipts — there's no real file behind a
+        // Square payment, so this skips storage and the OCR queue entirely.
+        Document document = documentService.createFromExternalData(
+                tenantId,
+                Document.DocumentSource.SQUARE,
+                "square-" + externalId,
+                new ExternalDataSeed(
+                        transaction.getDescription(),
+                        transaction.getTransactionDate().atZone(ZoneOffset.UTC).toLocalDate(),
+                        transaction.getAmount(),
+                        transaction.getCurrency()));
+        transaction.setDocumentId(document.getId());
         transactionRepository.save(transaction);
 
         logger.debug("Imported Square transaction: {}", externalId);

@@ -1,16 +1,21 @@
 package com.akihlee.finance.integrations.square;
 
+import com.akihlee.documents.DocumentService;
+import com.akihlee.documents.StorageService;
 import com.akihlee.identity.Tenant;
 import com.akihlee.identity.TenantContext;
 import com.akihlee.identity.TenantRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.squareup.square.models.Money;
 import com.squareup.square.models.Payment;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Import;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -40,7 +45,7 @@ import static org.mockito.Mockito.when;
 @Testcontainers
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({SquareSyncService.class, MockSquareApiClient.class})
+@Import({SquareSyncService.class, MockSquareApiClient.class, DocumentService.class, ObjectMapper.class})
 class SquareSyncServiceTest {
 
     @Container
@@ -58,6 +63,15 @@ class SquareSyncServiceTest {
 
     @Autowired
     private MockSquareApiClient mockSquareApiClient;
+
+    // Square-imported documents never touch storage or the OCR queue (see
+    // DocumentService.createFromExternalData), so these only need to exist
+    // as beans to satisfy DocumentService's constructor — never stubbed.
+    @MockBean
+    private StorageService storageService;
+
+    @MockBean
+    private RabbitTemplate rabbitTemplate;
 
     private Tenant tenant;
 
@@ -178,10 +192,9 @@ class SquareSyncServiceTest {
 
     // Helper method to create mock Square Payment
     private Payment createMockPayment(String id, Long amountCents, String currency, String status) {
-        return new Payment.Builder(
-            id,
-            Money.fromJson("{\"amount\": " + amountCents + ", \"currency\": \"" + currency + "\"}")
-        )
+        return new Payment.Builder()
+        .id(id)
+        .amountMoney(new Money(amountCents, currency))
         .status(status)
         .createdAt(Instant.now().toString())
         .build();
