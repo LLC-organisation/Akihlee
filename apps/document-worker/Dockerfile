@@ -21,5 +21,7 @@ COPY app/ ./app/
 # Expose port
 EXPOSE 8000
 
-# Run with uvicorn
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Run with uvicorn. No --reload: this image is what gets deployed, and the
+# reloader's file-watcher is dev-only overhead that never triggers on a
+# static container filesystem — it just adds startup/memory cost here.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

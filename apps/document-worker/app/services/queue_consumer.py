@@ -94,8 +94,8 @@ class QueueConsumer:
 
             try:
                 with TemporaryDirectory() as tmpdir:
-                    image_path = self._download_and_prepare_image(event, Path(tmpdir))
-                    result = await self.ocr_service.extract_receipt_fields(image_path)
+                    image_paths = self._download_and_prepare_images(event, Path(tmpdir))
+                    result = await self.ocr_service.extract_receipt_fields(image_paths)
 
                 status = (
                     "EXTRACTED"
@@ -123,8 +123,13 @@ class QueueConsumer:
                     logger.error(f"Also failed to report failure for document {document_id}")
                 raise
 
-    def _download_and_prepare_image(self, event: dict, tmpdir: Path) -> Path:
-        """Downloads the source file and returns a path to an image Tesseract can read."""
+    def _download_and_prepare_images(self, event: dict, tmpdir: Path) -> list[Path]:
+        """Downloads the source file and returns paths to images Tesseract can read.
+
+        PDFs are converted page-by-page (capped at settings.MAX_PDF_PAGES, so
+        an unusually long statement can't stall the worker) so multi-page
+        receipts/invoices get OCR'd in full rather than just their first page.
+        """
         storage_key = event["storage_key"]
         content_type = event.get("content_type", "")
         suffix = Path(event.get("filename", "")).suffix or ".bin"
@@ -133,12 +138,17 @@ class QueueConsumer:
         self.s3_client.download_file(settings.S3_BUCKET_DOCUMENTS, storage_key, str(source_path))
 
         if content_type == "application/pdf" or suffix.lower() == ".pdf":
-            pages = convert_from_path(str(source_path), dpi=200, first_page=1, last_page=1)
-            image_path = tmpdir / "page-1.png"
-            pages[0].save(image_path, "PNG")
-            return image_path
+            pages = convert_from_path(
+                str(source_path), dpi=200, first_page=1, last_page=settings.MAX_PDF_PAGES
+            )
+            image_paths = []
+            for i, page in enumerate(pages, start=1):
+                image_path = tmpdir / f"page-{i}.png"
+                page.save(image_path, "PNG")
+                image_paths.append(image_path)
+            return image_paths
 
-        return source_path
+        return [source_path]
 
     async def _send_callback(self, document_id: str, result: dict, status: str) -> None:
         payload = {
@@ -148,6 +158,8 @@ class QueueConsumer:
             "currency": result.get("currency", "KES"),
             "taxAmount": result.get("tax_amount"),
             "lineItems": result.get("line_items", []),
+            "documentType": result.get("document_type", "RECEIPT"),
+            "bankTransactions": result.get("bank_transactions", []),
             "rawText": result.get("raw_text", ""),
             "confidence": result.get("confidence", 0.0),
             "status": status,

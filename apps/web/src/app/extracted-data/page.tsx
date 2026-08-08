@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import type { Route } from 'next';
 import { extractedDataApi, getAuthToken, ExtractedData, UpdateExtractedDataRequest } from '@/lib/api-client';
 import { AppSidebar } from '@/components/AppSidebar';
+import { DocumentTypeBadge } from '@/components/DocumentTypeBadge';
 
 const PAGE_SIZE = 10;
 
@@ -165,7 +168,7 @@ export default function ExtractedDataPage() {
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
               Structured fields the OCR pipeline pulled from your uploaded receipts and invoices —
               this is what powers the AI CFO features. Click merchant, date, or amount to fix
-              anything OCR got wrong.
+              anything OCR got wrong, or open a row for the full scanned document.
             </p>
           </div>
 
@@ -196,6 +199,7 @@ export default function ExtractedDataPage() {
                     <thead>
                       <tr>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">Document</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">Type</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">Merchant</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">Date</th>
                         <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">Amount</th>
@@ -209,11 +213,26 @@ export default function ExtractedDataPage() {
                         const isEditingDate = editing?.rowId === row.id && editing.field === 'date';
                         const isEditingAmount = editing?.rowId === row.id && editing.field === 'amount';
                         const rowHasError = editing?.rowId === row.id && saveError;
+                        // Same pattern as /documents: Link goes inside each <td>
+                        // rather than wrapping the whole <tr>, since an <a> can't
+                        // span multiple <td>s.
+                        const href = `/documents/${row.documentId}` as Route;
 
                         return (
                           <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors duration-200">
-                            <td className="px-4 py-3 text-sm text-slate-900 dark:text-white font-medium whitespace-nowrap max-w-[200px] truncate">
-                              {row.filename}
+                            <td className="p-0">
+                              <Link
+                                href={href}
+                                className="block px-4 py-3 text-sm text-slate-900 dark:text-white font-medium whitespace-nowrap max-w-[200px] truncate"
+                              >
+                                {row.filename}
+                              </Link>
+                            </td>
+
+                            <td className="p-0">
+                              <Link href={href} className="flex items-center px-4 py-3 whitespace-nowrap">
+                                <DocumentTypeBadge documentType={row.documentType} />
+                              </Link>
                             </td>
 
                             <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">
@@ -301,11 +320,18 @@ export default function ExtractedDataPage() {
                               )}
                             </td>
 
-                            <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 text-right whitespace-nowrap">
-                              {lineItemCount(row.lineItemsJson)}
+                            <td className="p-0">
+                              <Link
+                                href={href}
+                                className="block px-4 py-3 text-sm text-slate-600 dark:text-slate-300 text-right whitespace-nowrap"
+                              >
+                                {lineItemCount(row.lineItemsJson)}
+                              </Link>
                             </td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              <ConfidenceBadge confidence={row.confidence} />
+                            <td className="p-0">
+                              <Link href={href} className="flex items-center px-4 py-3 whitespace-nowrap">
+                                <ConfidenceBadge confidence={row.confidence} />
+                              </Link>
                             </td>
                           </tr>
                         );

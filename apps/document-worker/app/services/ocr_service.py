@@ -24,6 +24,24 @@ _TAX_LINE_PATTERN = re.compile(r"(?:tax|vat)[^\d]{0,10}([\d,]+\.\d{2})", re.IGNO
 _AMOUNT_PATTERN = re.compile(r"\d[\d,]*\.\d{2}")
 _CURRENCY_SYMBOLS = {"$": "USD", "€": "EUR", "£": "GBP", "ksh": "KES", "kes": "KES"}
 
+# Leading "2 x " / "2× " on a line item, so quantity/unit price can be split
+# out from the trailing total price when the receipt prints it that way.
+_QTY_PREFIX_PATTERN = re.compile(r"^(\d+(?:\.\d+)?)\s*[x×]\s*", re.IGNORECASE)
+
+# A bank statement transaction line: a leading date, a free-text
+# description, and a trailing signed amount (e.g. "12/03/2026 POS PURCHASE
+# STORE 4 -1,250.00"). Deliberately loose since statement layouts vary a lot.
+_BANK_LINE_PATTERN = re.compile(
+    r"^(?P<date>\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s+(?P<desc>.+?)\s+"
+    r"(?P<sign>-)?(?P<amount>[\d,]+\.\d{2})\s*$"
+)
+
+_BANK_STATEMENT_KEYWORDS = (
+    "account statement", "statement of account", "opening balance",
+    "closing balance", "account number", "sort code", "iban", "swift",
+)
+_INVOICE_KEYWORDS = ("invoice number", "invoice no", "bill to", "invoice date", "due date", "purchase order")
+
 
 class OCRService:
     """Handles OCR and field extraction from receipt/invoice images."""
@@ -41,18 +59,26 @@ class OCRService:
             logger.error(f"OCR extraction failed: {e}")
             raise
 
-    async def extract_receipt_fields(self, image_path: Path) -> dict[str, Any]:
+    async def extract_receipt_fields(self, image_paths: Path | list[Path]) -> dict[str, Any]:
         """
-        Extract structured fields from a receipt image using Tesseract OCR
-        plus regex/heuristic parsing of the raw text.
+        Extract structured fields from one or more receipt/invoice page
+        images using Tesseract OCR plus regex/heuristic parsing of the raw
+        text. Multiple pages (e.g. a multi-page PDF statement) are OCR'd
+        individually and their text concatenated before field extraction,
+        so a total/tax on a later page or line items spread across pages
+        are still picked up by the same heuristics.
 
         This is intentionally rule-based rather than LLM-based: no
         OPENAI_API_KEY/ANTHROPIC_API_KEY is configured for this project yet.
         If one is added later, this is the natural place to swap in a real
         structured-extraction call for higher accuracy.
         """
-        raw_text = await self.extract_text(image_path)
+        pages = [image_paths] if isinstance(image_paths, Path) else image_paths
+        page_texts = [await self.extract_text(page) for page in pages]
+        raw_text = "\n\n".join(page_texts)
         lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
+
+        document_type = self._classify_document_type(raw_text)
 
         merchant = lines[0] if lines else None
         total_amount = self._extract_total(raw_text)
@@ -60,6 +86,9 @@ class OCRService:
         date = self._extract_date(raw_text)
         currency = self._extract_currency(raw_text)
         line_items = self._extract_line_items(lines)
+        bank_transactions = (
+            self._extract_bank_transactions(lines) if document_type == "BANK_STATEMENT" else []
+        )
 
         fields_found = sum(1 for f in (merchant, total_amount, date) if f is not None)
         confidence = round(fields_found / 3, 2)
@@ -74,6 +103,8 @@ class OCRService:
             "date": date,
             "tax_amount": tax_amount,
             "line_items": line_items,
+            "document_type": document_type,
+            "bank_transactions": bank_transactions,
             "confidence": confidence,
             "status": "extracted" if raw_text.strip() else "failed",
         }
@@ -97,7 +128,10 @@ class OCRService:
         match = _DATE_PATTERN.search(text)
         if not match:
             return None
-        raw = match.group(1)
+        return OCRService._parse_date_token(match.group(1))
+
+    @staticmethod
+    def _parse_date_token(raw: str) -> str | None:
         for fmt in _DATE_FORMATS:
             try:
                 return datetime.strptime(raw, fmt).date().isoformat()
@@ -114,12 +148,77 @@ class OCRService:
         return "KES"  # Default market for this project
 
     @staticmethod
-    def _extract_line_items(lines: list[str]) -> list[str]:
+    def _extract_line_items(lines: list[str]) -> list[dict[str, Any]]:
         # Heuristic: a line ending in a price that isn't the total/tax line.
-        items = []
+        # SKU/category/taxability aren't inferable from OCR text alone, so
+        # those are left null for a person to fill in during review.
+        items: list[dict[str, Any]] = []
         for line in lines:
-            if re.search(r"\d+\.\d{2}\s*$", line) and not re.search(
+            match = re.search(r"([\d,]+\.\d{2})\s*$", line)
+            if not match or re.search(
                 r"total|tax|vat|subtotal|change|cash|balance", line, re.IGNORECASE
             ):
-                items.append(line)
+                continue
+
+            total_price = float(match.group(1).replace(",", ""))
+            description = line[: match.start()].strip(" -\t")
+
+            quantity = None
+            unit_price = None
+            qty_match = _QTY_PREFIX_PATTERN.match(description)
+            if qty_match:
+                qty_value = float(qty_match.group(1))
+                if qty_value > 0:
+                    quantity = qty_value
+                    unit_price = round(total_price / qty_value, 2)
+                    description = description[qty_match.end():].strip()
+
+            items.append({
+                "description": description or line,
+                "sku": None,
+                "quantity": quantity,
+                "unitPrice": unit_price,
+                "totalPrice": total_price,
+                "categoryTag": None,
+                "isTaxable": None,
+            })
         return items[:20]
+
+    @staticmethod
+    def _classify_document_type(text: str) -> str:
+        lowered = text.lower()
+        if any(kw in lowered for kw in _BANK_STATEMENT_KEYWORDS):
+            return "BANK_STATEMENT"
+        if "invoice" in lowered or any(kw in lowered for kw in _INVOICE_KEYWORDS):
+            return "INVOICE"
+        return "RECEIPT"
+
+    @staticmethod
+    def _extract_bank_transactions(lines: list[str]) -> list[dict[str, Any]]:
+        # Loose on purpose: statement layouts vary a lot, and any line that
+        # doesn't match a leading date + trailing amount is skipped rather
+        # than guessed at.
+        transactions: list[dict[str, Any]] = []
+        for line in lines:
+            match = _BANK_LINE_PATTERN.match(line)
+            if not match:
+                continue
+            date = OCRService._parse_date_token(match.group("date"))
+            if not date:
+                continue
+
+            amount = float(match.group("amount").replace(",", ""))
+            description = match.group("desc").strip()
+            is_expense = match.group("sign") is not None or re.search(
+                r"\bdebit\b|\bdb\b|\bwithdrawal\b", line, re.IGNORECASE
+            )
+
+            transactions.append({
+                "transactionDate": date,
+                "description": description,
+                "payeeOrPayer": description,
+                "amount": amount,
+                "type": "EXPENSE" if is_expense else "INCOME",
+                "category": "Uncategorized",
+            })
+        return transactions[:200]

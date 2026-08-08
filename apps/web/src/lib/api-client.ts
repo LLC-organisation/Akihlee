@@ -83,6 +83,7 @@ export type Document = {
   contentType: string;
   sizeBytes: number;
   status: 'UPLOADED' | 'PROCESSING' | 'EXTRACTED' | 'REVIEW_REQUIRED' | 'APPROVED' | 'REJECTED';
+  source: 'UPLOAD' | 'EMAIL' | 'WHATSAPP' | 'SQUARE';
   createdAt: string;
 };
 
@@ -149,6 +150,18 @@ export const aiCfoApi = {
   },
 };
 
+// SKU/category/taxability can't be read off a receipt by OCR — those are
+// left null by the worker and are exactly the fields review is for.
+export type LineItem = {
+  description: string;
+  sku?: string | null;
+  quantity?: number | null;
+  unitPrice?: number | null;
+  totalPrice: number;
+  categoryTag?: string | null;
+  isTaxable?: boolean | null;
+};
+
 export type ExtractedData = {
   id: string;
   documentId: string;
@@ -160,8 +173,31 @@ export type ExtractedData = {
   currency: string | null;
   taxAmount: number | null;
   lineItemsJson: string | null;
+  documentType: 'RECEIPT' | 'INVOICE' | 'BANK_STATEMENT';
   confidence: number;
   createdAt: string;
+};
+
+export type BankTransaction = {
+  id: string;
+  extractedDataId: string;
+  tenantId: string;
+  transactionDate: string;
+  description: string | null;
+  payeeOrPayer: string | null;
+  amount: number;
+  type: 'INCOME' | 'EXPENSE' | 'TRANSFER';
+  category: string | null;
+  createdAt: string;
+};
+
+export type BankTransactionRequest = {
+  transactionDate: string; // ISO yyyy-MM-dd
+  description: string | null;
+  payeeOrPayer: string | null;
+  amount: number;
+  type: 'INCOME' | 'EXPENSE' | 'TRANSFER';
+  category: string | null;
 };
 
 export type Page<T> = {
@@ -178,6 +214,10 @@ export type UpdateExtractedDataRequest = {
   totalAmount: number | null;
   currency: string | null;
   taxAmount: number | null;
+  // Omit (undefined) to leave line items untouched — only send this when
+  // actually editing them, since the backend treats null/absent as "don't
+  // overwrite" (see ExtractedDataController.update).
+  lineItems?: LineItem[] | null;
 };
 
 export const extractedDataApi = {
@@ -198,6 +238,41 @@ export const extractedDataApi = {
   update: async (id: string, request: UpdateExtractedDataRequest): Promise<ExtractedData> => {
     const response = await apiClient.put<ExtractedData>(`/extracted-data/${id}`, request);
     return response.data;
+  },
+
+  /**
+   * Single-document view, for the per-document review page — 404s if OCR
+   * hasn't produced a row yet.
+   */
+  getByDocument: async (documentId: string): Promise<ExtractedData> => {
+    const response = await apiClient.get<ExtractedData>(`/documents/${documentId}/extracted-data`);
+    return response.data;
+  },
+};
+
+export const bankTransactionsApi = {
+  list: async (extractedDataId: string): Promise<BankTransaction[]> => {
+    const response = await apiClient.get<BankTransaction[]>(
+      `/extracted-data/${extractedDataId}/bank-transactions`
+    );
+    return response.data;
+  },
+
+  create: async (extractedDataId: string, request: BankTransactionRequest): Promise<BankTransaction> => {
+    const response = await apiClient.post<BankTransaction>(
+      `/extracted-data/${extractedDataId}/bank-transactions`,
+      request
+    );
+    return response.data;
+  },
+
+  update: async (id: string, request: BankTransactionRequest): Promise<BankTransaction> => {
+    const response = await apiClient.put<BankTransaction>(`/bank-transactions/${id}`, request);
+    return response.data;
+  },
+
+  remove: async (id: string): Promise<void> => {
+    await apiClient.delete(`/bank-transactions/${id}`);
   },
 };
 
@@ -267,6 +342,35 @@ export const documentsApi = {
    */
   get: async (id: string): Promise<Document> => {
     const response = await apiClient.get<Document>(`/documents/${id}`);
+    return response.data;
+  },
+
+  approve: async (id: string): Promise<Document> => {
+    const response = await apiClient.post<Document>(`/documents/${id}/approve`);
+    return response.data;
+  },
+
+  reject: async (id: string, reason: string | null): Promise<Document> => {
+    const response = await apiClient.post<Document>(`/documents/${id}/reject`, { reason });
+    return response.data;
+  },
+
+  /**
+   * Fetches the original file as a blob URL for use in <img>/<a> tags.
+   * A plain <img src="…/content"> can't carry the auth header and the
+   * endpoint isn't public, so this goes through apiClient (which attaches
+   * the JWT) and hands back an object URL instead — caller is responsible
+   * for revoking it (URL.revokeObjectURL) when done with it.
+   */
+  getContentBlobUrl: async (id: string): Promise<string> => {
+    const response = await apiClient.get(`/documents/${id}/content`, { responseType: 'blob' });
+    return URL.createObjectURL(response.data as Blob);
+  },
+};
+
+export const integrationsApi = {
+  syncSquare: async (): Promise<{ imported: number }> => {
+    const response = await apiClient.post<{ imported: number }>('/integrations/square/sync');
     return response.data;
   },
 };

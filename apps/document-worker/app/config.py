@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     # OCR Configuration
     TESSERACT_PATH: str | None = None  # Auto-detect if None
     OCR_CONFIDENCE_THRESHOLD: float = 0.7
+    MAX_PDF_PAGES: int = 5  # Bounds OCR time on long multi-page statements
 
     # Core API callback (extraction results are pushed back via REST rather
     # than a second queue, so the schema stays owned in one place)

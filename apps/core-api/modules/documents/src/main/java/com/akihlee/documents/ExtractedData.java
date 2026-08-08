@@ -48,6 +48,10 @@ public class ExtractedData {
     @Column(name = "line_items_json", columnDefinition = "TEXT")
     private String lineItemsJson;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "document_type", nullable = false)
+    private DocumentType documentType = DocumentType.RECEIPT;
+
     @Column(name = "raw_text", columnDefinition = "TEXT")
     private String rawText;
 
@@ -131,6 +135,14 @@ public class ExtractedData {
         this.lineItemsJson = lineItemsJson;
     }
 
+    public DocumentType getDocumentType() {
+        return documentType;
+    }
+
+    public void setDocumentType(DocumentType documentType) {
+        this.documentType = documentType != null ? documentType : DocumentType.RECEIPT;
+    }
+
     public String getRawText() {
         return rawText;
     }
@@ -149,5 +161,11 @@ public class ExtractedData {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public enum DocumentType {
+        RECEIPT,
+        INVOICE,
+        BANK_STATEMENT
     }
 }

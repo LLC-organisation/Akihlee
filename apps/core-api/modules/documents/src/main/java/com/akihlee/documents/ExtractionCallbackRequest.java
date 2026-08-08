@@ -12,7 +12,9 @@ public record ExtractionCallbackRequest(
         BigDecimal totalAmount,
         String currency,
         BigDecimal taxAmount,
-        List<String> lineItems,
+        List<LineItem> lineItems,
+        String documentType, // "RECEIPT" | "INVOICE" | "BANK_STATEMENT", or null (defaults to RECEIPT)
+        List<BankTransactionRequest> bankTransactions, // only populated for BANK_STATEMENT
         String rawText,
         double confidence,
         String status // "EXTRACTED" or "REVIEW_REQUIRED"
