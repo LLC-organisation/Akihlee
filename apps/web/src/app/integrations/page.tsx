@@ -1,18 +1,72 @@
 'use client';
 
-import { useCallback, useEffect, useState, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useState, FormEvent, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { getAuthToken, tenantApi, integrationsApi, Tenant } from '@/lib/api-client';
 import { AppSidebar } from '@/components/AppSidebar';
 import { isAxiosError } from 'axios';
 
-function SectionCard({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+function SectionCard({
+  title,
+  description,
+  icon,
+  children,
+}: {
+  title: string;
+  description?: string;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <div className="bg-white dark:bg-surface border border-slate-200 dark:border-white/10 rounded-2xl shadow-sm dark:shadow-none p-6 sm:p-8 transition-all duration-200">
-      <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{title}</h2>
+      <div className="flex items-center gap-3">
+        {icon}
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{title}</h2>
+      </div>
       {description && <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">{description}</p>}
       <div className={description ? '' : 'mt-4'}>{children}</div>
     </div>
+  );
+}
+
+// Custom-drawn glyphs (not literal brand asset files) rendered in each
+// integration's characteristic color — matches the app's existing
+// stroke-icon-in-a-tinted-badge convention (see dashboard StatTile, the
+// landing page's feature cards) rather than pulling in a third-party icon
+// pack or an external logo image.
+function EmailLogo() {
+  return (
+    <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 shrink-0">
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"
+        />
+      </svg>
+    </span>
+  );
+}
+
+function WhatsAppLogo() {
+  return (
+    <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.362-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"
+        />
+      </svg>
+    </span>
+  );
+}
+
+function SquareLogo() {
+  return (
+    <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-900 dark:bg-white shrink-0">
+      <span className="w-4 h-4 rounded-md border-2 border-white dark:border-slate-900" />
+    </span>
   );
 }
 
@@ -67,6 +121,7 @@ function WhatsAppSection({ tenant, onUpdated }: { tenant: Tenant; onUpdated: (t:
   return (
     <SectionCard
       title="WhatsApp"
+      icon={<WhatsAppLogo />}
       description="Connect a WhatsApp number so you can send receipts and invoices directly to Akihlee."
     >
       {message && <div className={message.type === 'success' ? successBanner : errorBanner}>{message.text}</div>}
@@ -120,6 +175,7 @@ function EmailSection({ tenant }: { tenant: Tenant }) {
   return (
     <SectionCard
       title="Email"
+      icon={<EmailLogo />}
       description="Forward or CC receipts and invoices to this address — attachments are picked up automatically."
     >
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -137,9 +193,53 @@ function EmailSection({ tenant }: { tenant: Tenant }) {
   );
 }
 
-function SquareSection() {
+function SquareSection({
+  tenant,
+  onUpdated,
+  oauthBanner,
+}: {
+  tenant: Tenant;
+  onUpdated: (t: Tenant) => void;
+  oauthBanner: { type: 'success' | 'error'; text: string } | null;
+}) {
   const [syncing, setSyncing] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const handleConnect = async () => {
+    setMessage(null);
+    setConnecting(true);
+    try {
+      const url = await integrationsApi.getSquareAuthorizeUrl();
+      // A real top-level navigation, not a fetch — Square's own consent
+      // screen isn't something an XHR can render.
+      window.location.href = url;
+    } catch (err) {
+      const notConfigured = isAxiosError(err) && err.response?.status === 400;
+      setMessage({
+        type: 'error',
+        text: notConfigured
+          ? (err.response?.data as { error?: string } | undefined)?.error ?? 'Square OAuth is not configured.'
+          : 'Could not start connecting to Square. Please try again.',
+      });
+      setConnecting(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    setMessage(null);
+    setDisconnecting(true);
+    try {
+      await integrationsApi.disconnectSquare();
+      onUpdated({ ...tenant, squareConnected: false });
+      setMessage({ type: 'success', text: 'Square disconnected.' });
+    } catch {
+      setMessage({ type: 'error', text: 'Could not disconnect. Please try again.' });
+    } finally {
+      setDisconnecting(false);
+    }
+  };
 
   const handleSync = async () => {
     setMessage(null);
@@ -166,24 +266,57 @@ function SquareSection() {
   };
 
   return (
-    <SectionCard title="Square" description="Sync payments from your Square POS into Documents for review.">
+    <SectionCard
+      title="Square"
+      icon={<SquareLogo />}
+      description={
+        tenant.squareConnected
+          ? 'Sync payments from your Square POS into Documents for review.'
+          : 'Connect your Square account so your payments show up in Documents for review — no API keys needed.'
+      }
+    >
+      {oauthBanner && <div className={oauthBanner.type === 'success' ? successBanner : errorBanner}>{oauthBanner.text}</div>}
       {message && <div className={message.type === 'success' ? successBanner : errorBanner}>{message.text}</div>}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <p className="text-sm text-slate-500 dark:text-slate-400">Pulls the last 30 days of payments each time.</p>
-        <button onClick={handleSync} disabled={syncing} className={primaryButtonClasses}>
-          {syncing ? 'Syncing…' : 'Sync now'}
-        </button>
-      </div>
+
+      {tenant.squareConnected ? (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <p className="text-sm text-slate-500 dark:text-slate-400">Pulls the last 30 days of payments each time.</p>
+          <div className="flex items-center gap-3">
+            <button onClick={handleSync} disabled={syncing} className={primaryButtonClasses}>
+              {syncing ? 'Syncing…' : 'Sync now'}
+            </button>
+            <button
+              onClick={handleDisconnect}
+              disabled={disconnecting}
+              className="px-4 py-2 text-sm font-medium rounded-lg border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors duration-200 disabled:opacity-50"
+            >
+              {disconnecting ? 'Disconnecting…' : 'Disconnect'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex justify-end">
+          <button onClick={handleConnect} disabled={connecting} className={primaryButtonClasses}>
+            {connecting ? 'Redirecting…' : 'Connect with Square'}
+          </button>
+        </div>
+      )}
     </SectionCard>
   );
 }
 
-export default function IntegrationsPage() {
+// useSearchParams() (read below, for the Square OAuth callback's
+// ?square=connected|error) opts the page into client-side rendering and
+// requires a Suspense boundary around anything that calls it, or `next
+// build` fails prerendering this route — see the default export below.
+function IntegrationsPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [checkedAuth, setCheckedAuth] = useState(false);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [squareOAuthBanner, setSquareOAuthBanner] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     if (!getAuthToken()) {
@@ -192,6 +325,21 @@ export default function IntegrationsPage() {
     }
     setCheckedAuth(true);
   }, [router]);
+
+  // Square redirects back here with ?square=connected|error after the
+  // OAuth callback — surface it once, then strip the param so a refresh
+  // doesn't keep re-showing a stale banner.
+  useEffect(() => {
+    const square = searchParams.get('square');
+    if (!square) return;
+    setSquareOAuthBanner(
+      square === 'connected'
+        ? { type: 'success', text: 'Square connected.' }
+        : { type: 'error', text: 'Could not connect to Square. Please try again.' }
+    );
+    router.replace('/integrations');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -232,11 +380,19 @@ export default function IntegrationsPage() {
             <div className="space-y-6">
               <EmailSection tenant={tenant} />
               <WhatsAppSection tenant={tenant} onUpdated={setTenant} />
-              <SquareSection />
+              <SquareSection tenant={tenant} onUpdated={setTenant} oauthBanner={squareOAuthBanner} />
             </div>
           )}
         </main>
       </div>
     </div>
+  );
+}
+
+export default function IntegrationsPage() {
+  return (
+    <Suspense fallback={null}>
+      <IntegrationsPageContent />
+    </Suspense>
   );
 }

@@ -6,13 +6,15 @@ public record TenantResponse(
         UUID id,
         String businessName,
         String whatsappPhoneNumber,
-        String inboundEmailAddress) {
+        String inboundEmailAddress,
+        boolean squareConnected) {
 
     public static TenantResponse from(Tenant tenant, String inboundEmailDomain) {
         return new TenantResponse(
                 tenant.getId(),
                 tenant.getBusinessName(),
                 tenant.getWhatsappPhoneNumber(),
-                tenant.getId() + "@" + inboundEmailDomain);
+                tenant.getId() + "@" + inboundEmailDomain,
+                tenant.isSquareConnected());
     }
 }

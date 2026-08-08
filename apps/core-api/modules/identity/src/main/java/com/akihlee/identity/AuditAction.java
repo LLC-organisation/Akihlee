@@ -23,4 +23,6 @@ public final class AuditAction {
     public static final String BANK_TRANSACTION_EDITED = "BANK_TRANSACTION_EDITED";
     public static final String WHATSAPP_NUMBER_CONNECTED = "WHATSAPP_NUMBER_CONNECTED";
     public static final String WHATSAPP_NUMBER_DISCONNECTED = "WHATSAPP_NUMBER_DISCONNECTED";
+    public static final String SQUARE_CONNECTED = "SQUARE_CONNECTED";
+    public static final String SQUARE_DISCONNECTED = "SQUARE_DISCONNECTED";
 }

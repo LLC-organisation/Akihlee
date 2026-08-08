@@ -99,51 +99,28 @@ type StatTileProps = {
   value: number;
   hint: string;
   icon: React.ReactNode;
-  featured?: boolean;
-  tone?: 'blue' | 'amber' | 'emerald' | 'red';
+  bgClass: string;
   onClick?: () => void;
 };
 
-const TONE_CLASSES: Record<NonNullable<StatTileProps['tone']>, string> = {
-  blue: 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400',
-  amber: 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400',
-  emerald: 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-  red: 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400',
-};
-
-function StatTile({ label, value, hint, icon, featured, tone = 'blue', onClick }: StatTileProps) {
-  if (featured) {
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        className="rounded-2xl bg-accent-dark p-4 flex flex-col justify-between text-white shadow-sm text-left w-full hover:-translate-y-0.5 hover:shadow-md transition-all duration-200"
-      >
-        <div className="flex items-start justify-between">
-          <p className="text-sm font-medium text-white/80">{label}</p>
-          <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/20">{icon}</span>
-        </div>
-        <div>
-          <p className="text-2xl font-bold mt-2">{value}</p>
-          <p className="text-xs text-white/70 mt-1">{hint}</p>
-        </div>
-      </button>
-    );
-  }
-
+// Every KPI tile is a solid-color card now (not just a tinted icon on a
+// white card) — bgClass carries either a solid Tailwind color or the
+// accent-gradient utility, and text/icon styling stays white throughout
+// since every one of these backgrounds is dark/saturated enough for it.
+function StatTile({ label, value, hint, icon, bgClass, onClick }: StatTileProps) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`${cardClasses} p-4 flex flex-col justify-between text-left w-full hover:-translate-y-0.5 hover:shadow-md`}
+      className={`rounded-2xl ${bgClass} p-4 flex flex-col justify-between text-white shadow-sm text-left w-full hover:-translate-y-0.5 hover:shadow-md transition-all duration-200`}
     >
       <div className="flex items-start justify-between">
-        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{label}</p>
-        <span className={`flex items-center justify-center w-8 h-8 rounded-lg ${TONE_CLASSES[tone]}`}>{icon}</span>
+        <p className="text-sm font-medium text-white/80">{label}</p>
+        <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/20">{icon}</span>
       </div>
       <div>
-        <p className="text-2xl font-bold text-slate-900 dark:text-white mt-2">{value}</p>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{hint}</p>
+        <p className="text-2xl font-bold mt-2">{value}</p>
+        <p className="text-xs text-white/70 mt-1">{hint}</p>
       </div>
     </button>
   );
@@ -311,7 +288,7 @@ export default function Dashboard() {
                 onDrop={handleDrop}
                 className={`relative flex-1 border-2 border-dashed rounded-2xl p-6 text-center transition-all duration-200 flex items-center justify-center ${
                   dragActive
-                    ? 'border-accent bg-orange-50/50 dark:bg-accent/5'
+                    ? 'border-accent bg-blue-50/50 dark:bg-accent/5'
                     : 'border-slate-200 dark:border-white/10 hover:border-accent/50'
                 }`}
               >
@@ -349,7 +326,7 @@ export default function Dashboard() {
             {/* 2x2 KPI bento */}
             <div className="grid grid-cols-2 gap-4">
               <StatTile
-                featured
+                bgClass="bg-accent-gradient"
                 label="Total Documents"
                 value={documents.length}
                 hint={`${documentsThisMonth} uploaded this month`}
@@ -361,7 +338,7 @@ export default function Dashboard() {
                 }
               />
               <StatTile
-                tone="blue"
+                bgClass="bg-blue-600"
                 label="Processing Data"
                 value={pendingCount}
                 hint="Processing or needs attention"
@@ -373,7 +350,7 @@ export default function Dashboard() {
                 }
               />
               <StatTile
-                tone="emerald"
+                bgClass="bg-emerald-600"
                 label="Review and Approve"
                 value={approvedCount}
                 hint="Ready for your books"
@@ -385,7 +362,7 @@ export default function Dashboard() {
                 }
               />
               <StatTile
-                tone="red"
+                bgClass="bg-red-600"
                 label="Rejected"
                 value={rejectedCount}
                 hint="Needs correction"

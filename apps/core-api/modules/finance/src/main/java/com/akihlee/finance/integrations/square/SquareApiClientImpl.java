@@ -7,7 +7,6 @@ import com.squareup.square.models.ListPaymentsResponse;
 import com.squareup.square.models.Payment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -17,17 +16,19 @@ import java.util.List;
 
 /**
  * Production implementation of Square API client using Square SDK.
+ *
+ * Builds a fresh SquareClient per call rather than holding one configured
+ * at startup — each call can be authenticating as a different tenant's own
+ * OAuth-connected Square account (see SquareSyncService), not one shared
+ * operator token.
  */
 @Component
 public class SquareApiClientImpl implements SquareApiClient {
 
     private static final Logger logger = LoggerFactory.getLogger(SquareApiClientImpl.class);
 
-    private final SquareClient squareClient;
-
-    public SquareApiClientImpl(@Value("${square.access-token}") String accessToken,
-                               @Value("${square.environment:sandbox}") String environment) {
-        this.squareClient = new SquareClient.Builder()
+    private SquareClient buildClient(String accessToken, String environment) {
+        return new SquareClient.Builder()
             .accessToken(accessToken)
             .environment(environment.equalsIgnoreCase("production") ?
                 com.squareup.square.Environment.PRODUCTION :
@@ -36,8 +37,8 @@ public class SquareApiClientImpl implements SquareApiClient {
     }
 
     @Override
-    public List<Payment> fetchPayments(String locationId, Instant startDate, Instant endDate) {
-        PaymentsApi paymentsApi = squareClient.getPaymentsApi();
+    public List<Payment> fetchPayments(String accessToken, String environment, String locationId, Instant startDate, Instant endDate) {
+        PaymentsApi paymentsApi = buildClient(accessToken, environment).getPaymentsApi();
         List<Payment> allPayments = new ArrayList<>();
 
         try {
@@ -75,11 +76,11 @@ public class SquareApiClientImpl implements SquareApiClient {
     }
 
     @Override
-    public boolean testConnection() {
+    public boolean testConnection(String accessToken, String environment) {
         try {
             // Try to fetch recent payments as a connection test
             Instant now = Instant.now();
-            fetchPayments(null, now.minusSeconds(60), now);
+            fetchPayments(accessToken, environment, null, now.minusSeconds(60), now);
             return true;
         } catch (Exception e) {
             logger.error("Square connection test failed: {}", e.getMessage());

@@ -63,6 +63,11 @@ public class SecurityConfig {
                         // Called directly by Meta/WhatsApp, which has no user JWT either;
                         // the verify-token handshake is its own auth mechanism.
                         .requestMatchers("/api/v1/webhooks/**").permitAll()
+                        // Square redirects the browser here after OAuth consent — a
+                        // top-level navigation with no Authorization header. The
+                        // signed `state` param (not a JWT) proves which tenant it
+                        // belongs to; see SquareIntegrationController.oauthCallback.
+                        .requestMatchers("/api/v1/integrations/square/oauth/callback").permitAll()
                         // Audit log / admin tooling — gated on the "role" JWT claim
                         // (see JwtAuthenticationFilter), not just "any logged-in user".
                         .requestMatchers("/api/v1/admin/**").hasAuthority("ADMIN")

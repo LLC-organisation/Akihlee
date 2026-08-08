@@ -119,6 +119,7 @@ export type Tenant = {
   businessName: string;
   whatsappPhoneNumber: string | null;
   inboundEmailAddress: string;
+  squareConnected: boolean;
 };
 
 export const tenantApi = {
@@ -372,5 +373,20 @@ export const integrationsApi = {
   syncSquare: async (): Promise<{ imported: number }> => {
     const response = await apiClient.post<{ imported: number }>('/integrations/square/sync');
     return response.data;
+  },
+
+  /**
+   * Returns the URL to send the browser to for Square's consent screen.
+   * A separate call from the actual navigation (`window.location.href =
+   * url`) since this one needs to be an authenticated fetch carrying the
+   * JWT — a plain link click to a protected backend route couldn't.
+   */
+  getSquareAuthorizeUrl: async (): Promise<string> => {
+    const response = await apiClient.post<{ url: string }>('/integrations/square/oauth/authorize-url');
+    return response.data.url;
+  },
+
+  disconnectSquare: async (): Promise<void> => {
+    await apiClient.delete('/integrations/square/oauth');
   },
 };

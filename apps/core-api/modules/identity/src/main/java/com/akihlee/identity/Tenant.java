@@ -35,6 +35,22 @@ public class Tenant {
     @Column(name = "whatsapp_phone_number", unique = true)
     private String whatsappPhoneNumber;
 
+    // Populated once this tenant completes Square's OAuth flow (see
+    // SquareOAuthService) — null means "not connected via OAuth", in which
+    // case SquareSyncService falls back to the operator's own
+    // SQUARE_ACCESS_TOKEN env var, if configured.
+    @Column(name = "square_access_token", columnDefinition = "TEXT")
+    private String squareAccessToken;
+
+    @Column(name = "square_refresh_token", columnDefinition = "TEXT")
+    private String squareRefreshToken;
+
+    @Column(name = "square_merchant_id")
+    private String squareMerchantId;
+
+    @Column(name = "square_token_expires_at")
+    private Instant squareTokenExpiresAt;
+
     protected Tenant() {
         // JPA requires a no-arg constructor
     }
@@ -87,6 +103,42 @@ public class Tenant {
 
     public void setWhatsappPhoneNumber(String whatsappPhoneNumber) {
         this.whatsappPhoneNumber = whatsappPhoneNumber;
+        this.updatedAt = Instant.now();
+    }
+
+    public boolean isSquareConnected() {
+        return squareAccessToken != null;
+    }
+
+    public String getSquareAccessToken() {
+        return squareAccessToken;
+    }
+
+    public String getSquareRefreshToken() {
+        return squareRefreshToken;
+    }
+
+    public String getSquareMerchantId() {
+        return squareMerchantId;
+    }
+
+    public Instant getSquareTokenExpiresAt() {
+        return squareTokenExpiresAt;
+    }
+
+    public void connectSquare(String accessToken, String refreshToken, String merchantId, Instant expiresAt) {
+        this.squareAccessToken = accessToken;
+        this.squareRefreshToken = refreshToken;
+        this.squareMerchantId = merchantId;
+        this.squareTokenExpiresAt = expiresAt;
+        this.updatedAt = Instant.now();
+    }
+
+    public void disconnectSquare() {
+        this.squareAccessToken = null;
+        this.squareRefreshToken = null;
+        this.squareMerchantId = null;
+        this.squareTokenExpiresAt = null;
         this.updatedAt = Instant.now();
     }
 }

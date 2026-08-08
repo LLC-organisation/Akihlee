@@ -3,16 +3,20 @@ package com.akihlee.finance.integrations.square;
 import com.akihlee.documents.Document;
 import com.akihlee.documents.DocumentService;
 import com.akihlee.documents.ExternalDataSeed;
+import com.akihlee.identity.Tenant;
 import com.akihlee.identity.TenantContext;
+import com.akihlee.identity.TenantRepository;
 import com.squareup.square.models.Payment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -29,13 +33,25 @@ public class SquareSyncService {
     private final SquareApiClient squareApiClient;
     private final SquareTransactionRepository transactionRepository;
     private final DocumentService documentService;
+    private final TenantRepository tenantRepository;
+    private final SquareOAuthService squareOAuthService;
+    private final String fallbackAccessToken;
+    private final String fallbackEnvironment;
 
     public SquareSyncService(SquareApiClient squareApiClient,
                              SquareTransactionRepository transactionRepository,
-                             DocumentService documentService) {
+                             DocumentService documentService,
+                             TenantRepository tenantRepository,
+                             SquareOAuthService squareOAuthService,
+                             @Value("${square.access-token:}") String fallbackAccessToken,
+                             @Value("${square.environment:sandbox}") String fallbackEnvironment) {
         this.squareApiClient = squareApiClient;
         this.transactionRepository = transactionRepository;
         this.documentService = documentService;
+        this.tenantRepository = tenantRepository;
+        this.squareOAuthService = squareOAuthService;
+        this.fallbackAccessToken = fallbackAccessToken;
+        this.fallbackEnvironment = fallbackEnvironment;
     }
 
     /**
@@ -52,8 +68,9 @@ public class SquareSyncService {
         logger.info("Syncing Square transactions for tenant {} from {} to {}",
                     tenantId, startDate, endDate);
 
-        // Fetch payments from Square API
-        List<Payment> payments = squareApiClient.fetchPayments(null, startDate, endDate);
+        SquareCredentials credentials = resolveCredentials(tenantId);
+        List<Payment> payments = squareApiClient.fetchPayments(
+                credentials.accessToken(), credentials.environment(), null, startDate, endDate);
 
         int importedCount = 0;
         for (Payment payment : payments) {
@@ -64,6 +81,43 @@ public class SquareSyncService {
 
         logger.info("Imported {} new Square transactions for tenant {}", importedCount, tenantId);
         return importedCount;
+    }
+
+    /**
+     * Prefers the tenant's own OAuth-connected Square account; falls back
+     * to the operator's SQUARE_ACCESS_TOKEN (if configured) so the
+     * original single-tenant setup keeps working unchanged for anyone who
+     * hasn't connected their own account yet.
+     */
+    private SquareCredentials resolveCredentials(UUID tenantId) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new IllegalStateException("Tenant not found: " + tenantId));
+
+        if (tenant.isSquareConnected()) {
+            refreshIfNeeded(tenant);
+            // An OAuth-connected token was issued against whichever Square
+            // environment this deployment authorized through (same as the
+            // fallback token's environment) — there's only one per deploy.
+            return new SquareCredentials(tenant.getSquareAccessToken(), fallbackEnvironment);
+        }
+
+        if (fallbackAccessToken == null || fallbackAccessToken.isBlank()) {
+            throw new SquareNotConfiguredException(
+                    "Square isn't connected for this account. Connect it from the Integrations page.");
+        }
+        return new SquareCredentials(fallbackAccessToken, fallbackEnvironment);
+    }
+
+    /** Proactively refreshes a tenant's Square token if it's expired or expiring soon. */
+    private void refreshIfNeeded(Tenant tenant) {
+        Instant expiresAt = tenant.getSquareTokenExpiresAt();
+        boolean needsRefresh = expiresAt == null || expiresAt.isBefore(Instant.now().plus(1, ChronoUnit.DAYS));
+        if (!needsRefresh || tenant.getSquareRefreshToken() == null) {
+            return;
+        }
+        SquareTokenResult refreshed = squareOAuthService.refreshAccessToken(tenant.getSquareRefreshToken());
+        tenant.connectSquare(refreshed.accessToken(), refreshed.refreshToken(), refreshed.merchantId(), refreshed.expiresAt());
+        tenantRepository.save(tenant);
     }
 
     /**

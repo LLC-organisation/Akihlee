@@ -19,12 +19,12 @@ public class MockSquareApiClient implements SquareApiClient {
     private List<Payment> mockPayments = new ArrayList<>();
 
     @Override
-    public List<Payment> fetchPayments(String locationId, Instant startDate, Instant endDate) {
+    public List<Payment> fetchPayments(String accessToken, String environment, String locationId, Instant startDate, Instant endDate) {
         return new ArrayList<>(mockPayments);
     }
 
     @Override
-    public boolean testConnection() {
+    public boolean testConnection(String accessToken, String environment) {
         return true;
     }
 

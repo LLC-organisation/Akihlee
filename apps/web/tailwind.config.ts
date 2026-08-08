@@ -55,17 +55,19 @@ const config: Config = {
           DEFAULT: '#131b2e',
           raised: '#161f33',
         },
-        // Warm accent for the sidebar-nav dashboard layout (logo mark,
-        // featured stat tile, chart bars) — distinct from the amber used
-        // for "pending" status so the two don't get confused.
+        // Royal blue brand accent (logo mark, featured stat tile, primary
+        // buttons, focus rings) — paired with white as the app's two core
+        // accent colors, replacing the earlier orange/cyan mix so every
+        // "accent" surface reads as one consistent brand color.
         accent: {
-          DEFAULT: '#f97316',
-          dark: '#ea580c',
+          DEFAULT: '#4169E1', // Royal Blue
+          dark: '#2A4BB8', // deeper royal blue for hover/emphasis
         },
       },
       backgroundImage: {
-        // Primary CTA gradient for dark mode (electric cyan/blue).
-        'accent-gradient': 'linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%)',
+        // Primary CTA gradient — royal blue deepening into a lighter sky
+        // blue, used for buttons and the featured "Total Documents" tile.
+        'accent-gradient': 'linear-gradient(135deg, #4169E1 0%, #6C9BFF 100%)',
       },
     },
   },

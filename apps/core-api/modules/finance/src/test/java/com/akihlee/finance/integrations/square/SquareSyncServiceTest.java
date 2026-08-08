@@ -73,6 +73,14 @@ class SquareSyncServiceTest {
     @MockBean
     private RabbitTemplate rabbitTemplate;
 
+    // Only exercised by SquareSyncService when a tenant has connected via
+    // OAuth and their token is near expiry — none of these tests connect a
+    // tenant that way, so this only needs to exist to satisfy the
+    // constructor. Real construction would also need JwtService, which
+    // this narrow @DataJpaTest slice doesn't scan for.
+    @MockBean
+    private SquareOAuthService squareOAuthService;
+
     private Tenant tenant;
 
     @BeforeEach

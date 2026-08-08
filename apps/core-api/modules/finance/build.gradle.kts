@@ -9,6 +9,11 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-validation")
+    // SecurityContextHolder, used by SquareIntegrationController to attribute
+    // audit log entries to the current user — identity/documents both
+    // declare this themselves too since Gradle's `implementation` scope
+    // doesn't leak transitively to consuming modules.
+    implementation("org.springframework.boot:spring-boot-starter-security")
 
     // Square SDK. Pinned version note: the original "38.1.0.20240717" pin
     // doesn't exist on Maven Central (that date suffix belongs to a
