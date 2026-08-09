@@ -9,9 +9,8 @@ const cardClasses =
 
 function Logo() {
   return (
-    <span className="flex items-center justify-center w-9 h-9 rounded-xl bg-accent text-white font-bold text-sm shrink-0">
-      A
-    </span>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src="/logo-icon.png" alt="Akihlee" className="w-9 h-9 rounded-xl object-contain shrink-0" />
   );
 }
 
@@ -63,7 +62,7 @@ const FEATURES = [
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
     ),
     title: 'Document Capture',
-    description: 'Upload receipts and invoices, or send them by email or WhatsApp — OCR extracts the numbers automatically.',
+    description: 'Upload receipts and invoices, or send them by email or WhatsApp. OCR extracts the numbers automatically.',
   },
   {
     iconWrapperClass: 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
@@ -71,7 +70,7 @@ const FEATURES = [
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
     ),
     title: 'Financial Visibility',
-    description: 'A live dashboard of P&L, cash flow, and every document status — reviewed and corrected by you, not guessed at.',
+    description: 'A live dashboard of P&L, cash flow, and every document status, reviewed and corrected by you, not guessed at.',
   },
   {
     iconWrapperClass: 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400',
@@ -88,7 +87,7 @@ const STEPS = [
   },
   {
     title: 'AI Extracts the Numbers',
-    description: 'OCR reads every merchant, amount, and line item — you review and fix anything it got wrong.',
+    description: 'OCR reads every merchant, amount, and line item. You review and fix anything it got wrong.',
   },
   {
     title: 'See Where You Stand',
@@ -134,7 +133,7 @@ export default function Home() {
               </h1>
               <p className="text-lg text-slate-500 dark:text-slate-400 mb-8">
                 Stop manually tracking expenses. Upload receipts, connect Square, and let AI turn them into a
-                live P&amp;L and cash flow picture — with a real person (you) reviewing every number.
+                live P&amp;L and cash flow picture, with a real person (you) reviewing every number.
               </p>
               <div className="flex flex-wrap items-center gap-4">
                 <Link href="/register" className={primaryButtonClasses}>
