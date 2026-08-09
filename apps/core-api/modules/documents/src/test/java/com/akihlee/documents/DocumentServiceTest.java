@@ -165,4 +165,44 @@ class DocumentServiceTest {
         byte[] retrieved = storageService.retrieve(doc.getStorageKey());
         assertThat(retrieved).isEqualTo(content);
     }
+
+    @Test
+    void shouldDeleteDocumentAndItsStoredFile() {
+        // Given: Acting as Tenant A with an uploaded document
+        TenantContext.setCurrentTenantId(tenantA.getId());
+        Document doc = documentService.uploadDocument(
+            "receipt_to_delete.pdf", "content".getBytes(), "application/pdf");
+        String storageKey = doc.getStorageKey();
+
+        // When: Deleting it
+        boolean deleted = documentService.delete(doc.getId());
+
+        // Then: Deletion reports success, the row is gone, and so is the file
+        assertThat(deleted).isTrue();
+        assertThat(documentService.getDocument(doc.getId())).isEmpty();
+        assertThat(storageService.exists(storageKey)).isFalse();
+    }
+
+    @Test
+    void shouldNotDeleteAnotherTenantsDocument() {
+        // Given: Tenant A uploads a document
+        TenantContext.setCurrentTenantId(tenantA.getId());
+        Document doc = documentService.uploadDocument(
+            "receipt_tenantA.pdf", "content".getBytes(), "application/pdf");
+
+        // When: Tenant B tries to delete it
+        TenantContext.setCurrentTenantId(tenantB.getId());
+        boolean deleted = documentService.delete(doc.getId());
+
+        // Then: Deletion is refused and the document still belongs to Tenant A
+        assertThat(deleted).isFalse();
+        TenantContext.setCurrentTenantId(tenantA.getId());
+        assertThat(documentService.getDocument(doc.getId())).isPresent();
+    }
+
+    @Test
+    void shouldReturnFalseWhenDeletingUnknownDocument() {
+        TenantContext.setCurrentTenantId(tenantA.getId());
+        assertThat(documentService.delete(UUID.randomUUID())).isFalse();
+    }
 }

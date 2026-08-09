@@ -175,6 +175,33 @@ public class DocumentService {
         return Optional.of(saved);
     }
 
+    /**
+     * Deletes a document and everything hanging off it: the extracted_data
+     * row (which cascades to bank_transactions at the DB level) and the
+     * stored file bytes. extracted_data must go first — it holds a
+     * non-cascading FK to documents, so deleting the document row while it
+     * still exists would fail with a foreign-key violation.
+     */
+    @Transactional
+    public boolean delete(UUID id) {
+        UUID tenantId = TenantContext.getCurrentTenantId();
+        Optional<Document> found = documentRepository.findByIdAndTenantId(id, tenantId);
+        if (found.isEmpty()) {
+            return false;
+        }
+
+        Document document = found.get();
+        extractedDataRepository.findByDocumentId(document.getId())
+                .ifPresent(extractedDataRepository::delete);
+        storageService.delete(document.getStorageKey());
+        documentRepository.delete(document);
+
+        auditLogService.log(tenantId, currentUserId(), currentUserEmail(),
+                AuditAction.DOCUMENT_DELETED, "DOCUMENT", document.getId().toString(), document.getFilename());
+
+        return true;
+    }
+
     private UUID currentUserId() {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || authentication.getName() == null) {

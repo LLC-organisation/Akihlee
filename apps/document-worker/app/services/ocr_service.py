@@ -22,7 +22,12 @@ _DATE_PATTERN = re.compile(r"\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2}|
 _TOTAL_LINE_PATTERN = re.compile(r"(?<!sub)(?<!sub )total[^\d]{0,10}([\d,]+\.\d{2})", re.IGNORECASE)
 _TAX_LINE_PATTERN = re.compile(r"(?:tax|vat)[^\d]{0,10}([\d,]+\.\d{2})", re.IGNORECASE)
 _AMOUNT_PATTERN = re.compile(r"\d[\d,]*\.\d{2}")
-_CURRENCY_SYMBOLS = {"$": "USD", "€": "EUR", "£": "GBP", "ksh": "KES", "kes": "KES"}
+# MVP only serves the US and Kenyan markets, so this is deliberately just
+# USD/KES signals rather than a general currency-symbol table.
+_CURRENCY_SYMBOLS = {
+    "$": "USD", "usd": "USD",
+    "ksh": "KES", "kshs": "KES", "kes": "KES", "/=": "KES",
+}
 
 # Leading "2 x " / "2× " on a line item, so quantity/unit price can be split
 # out from the trailing total price when the receipt prints it that way.

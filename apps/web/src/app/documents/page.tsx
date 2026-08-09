@@ -35,12 +35,23 @@ function fileTypeIcon(contentType: string) {
   );
 }
 
+function TrashIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+    </svg>
+  );
+}
+
 export default function DocumentsPage() {
   const router = useRouter();
   const [checkedAuth, setCheckedAuth] = useState(false);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!getAuthToken()) {
@@ -67,13 +78,27 @@ export default function DocumentsPage() {
     if (checkedAuth) load();
   }, [checkedAuth, load]);
 
+  const handleDelete = async (id: string) => {
+    setDeletingId(id);
+    setDeleteError(null);
+    try {
+      await documentsApi.delete(id);
+      setDocuments((prev) => prev.filter((d) => d.id !== id));
+    } catch {
+      setDeleteError('Could not delete the document. Please try again.');
+    } finally {
+      setDeletingId(null);
+      setConfirmDeleteId(null);
+    }
+  };
+
   if (!checkedAuth) return null;
 
   return (
     <div className="relative min-h-screen bg-white dark:bg-canvas">
       <div className="bg-glow" />
       <AppSidebar />
-      <div className="relative z-10 lg:pl-64">
+      <div className="relative z-10 lg:pl-20">
         <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Documents</h1>
@@ -82,6 +107,12 @@ export default function DocumentsPage() {
               Click one to review and approve it.
             </p>
           </div>
+
+          {deleteError && (
+            <div className="mb-4 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-500/10 text-sm text-red-600 dark:text-red-400">
+              {deleteError}
+            </div>
+          )}
 
           <div className={cardClasses}>
             {loading && <p className="text-slate-500 dark:text-slate-400 text-center py-12">Loading…</p>}
@@ -110,6 +141,9 @@ export default function DocumentsPage() {
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">Source</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">Status</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">Uploaded</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">
+                        <span className="sr-only">Actions</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-white/5">
@@ -150,6 +184,38 @@ export default function DocumentsPage() {
                             <Link href={href} className="block px-4 py-3 text-sm text-slate-500 dark:text-slate-400 whitespace-nowrap">
                               {new Date(doc.createdAt).toLocaleString()}
                             </Link>
+                          </td>
+                          <td className="px-4 py-3 text-right whitespace-nowrap">
+                            {confirmDeleteId === doc.id ? (
+                              <div className="flex items-center justify-end gap-3">
+                                <span className="text-xs text-slate-500 dark:text-slate-400">Delete?</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDelete(doc.id)}
+                                  disabled={deletingId === doc.id}
+                                  className="text-xs font-semibold text-red-600 dark:text-red-400 hover:underline disabled:opacity-50 disabled:pointer-events-none"
+                                >
+                                  {deletingId === doc.id ? 'Deleting…' : 'Confirm'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteId(null)}
+                                  disabled={deletingId === doc.id}
+                                  className="text-xs font-medium text-slate-500 dark:text-slate-400 hover:underline disabled:opacity-50 disabled:pointer-events-none"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteId(doc.id)}
+                                aria-label={`Delete ${doc.filename}`}
+                                className="p-2 rounded-lg text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors duration-200"
+                              >
+                                <TrashIcon />
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );

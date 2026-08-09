@@ -43,6 +43,15 @@ class Settings(BaseSettings):
     OCR_CONFIDENCE_THRESHOLD: float = 0.7
     MAX_PDF_PAGES: int = 5  # Bounds OCR time on long multi-page statements
 
+    # Vision-LLM extraction (primary path when configured) via OpenRouter,
+    # with the regex/Tesseract pipeline above kept as the fallback when this
+    # is unset, disabled, or the call/response fails. See VisionExtractionService.
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+    OPENROUTER_MODEL: str = "nvidia/nemotron-nano-12b-v2-vl:free"
+    VISION_EXTRACTION_ENABLED: bool = True
+    VISION_EXTRACTION_TIMEOUT_SECONDS: float = 60.0
+
     # Core API callback (extraction results are pushed back via REST rather
     # than a second queue, so the schema stays owned in one place)
     CORE_API_URL: str = "http://localhost:8080"

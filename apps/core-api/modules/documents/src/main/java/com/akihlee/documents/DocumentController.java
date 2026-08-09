@@ -62,6 +62,13 @@ public class DocumentController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable UUID id) {
+        return documentService.delete(id)
+                ? ResponseEntity.noContent().build()
+                : ResponseEntity.notFound().build();
+    }
+
     /**
      * Streams the original file back. Must resolve the document through
      * documentService.getDocument (tenant-scoped) rather than any untenanted

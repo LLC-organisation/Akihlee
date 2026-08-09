@@ -13,6 +13,7 @@ from pdf2image import convert_from_path
 
 from app.config import settings
 from app.services.ocr_service import OCRService
+from app.services.vision_extraction_service import VisionExtractionService
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +29,9 @@ class QueueConsumer:
        which updates the document's status and persists ExtractedData.
     """
 
-    def __init__(self, ocr_service: OCRService):
+    def __init__(self, ocr_service: OCRService, vision_service: VisionExtractionService | None = None):
         self.ocr_service = ocr_service
+        self.vision_service = vision_service
         self.connection: aio_pika.Connection | None = None
         self.channel: aio_pika.Channel | None = None
         self.queue: aio_pika.Queue | None = None
@@ -70,6 +72,8 @@ class QueueConsumer:
     async def stop(self):
         """Stop consuming and close connections."""
         await self.http_client.aclose()
+        if self.vision_service:
+            await self.vision_service.aclose()
         if self.connection:
             await self.connection.close()
             logger.info("Queue consumer stopped")
@@ -95,7 +99,7 @@ class QueueConsumer:
             try:
                 with TemporaryDirectory() as tmpdir:
                     image_paths = self._download_and_prepare_images(event, Path(tmpdir))
-                    result = await self.ocr_service.extract_receipt_fields(image_paths)
+                    result = await self._extract(image_paths)
 
                 status = (
                     "EXTRACTED"
@@ -103,7 +107,10 @@ class QueueConsumer:
                     else "REVIEW_REQUIRED"
                 )
                 await self._send_callback(document_id, result, status)
-                logger.info(f"Processed document {document_id}: {status} (confidence={result['confidence']})")
+                logger.info(
+                    f"Processed document {document_id}: {status} "
+                    f"(confidence={result['confidence']}, method={result.get('extraction_method')})"
+                )
 
             except Exception as e:
                 logger.error(f"Error processing document {document_id}: {e}")
@@ -122,6 +129,26 @@ class QueueConsumer:
                 except Exception:
                     logger.error(f"Also failed to report failure for document {document_id}")
                 raise
+
+    async def _extract(self, image_paths: list[Path]) -> dict:
+        """Vision LLM primary (if configured), regex/Tesseract fallback otherwise
+        or on any vision failure — see VisionExtractionService for why a failure
+        here is expected/handled rather than exceptional (free-tier rate limits,
+        occasional non-JSON output).
+        """
+        if self.vision_service is not None:
+            try:
+                result = await self.vision_service.extract(image_paths)
+                if result is not None:
+                    result["extraction_method"] = "vision"
+                    return result
+                logger.warning("Vision extraction returned no usable result, falling back to OCR")
+            except Exception as e:
+                logger.warning(f"Vision extraction raised, falling back to OCR: {e}")
+
+        result = await self.ocr_service.extract_receipt_fields(image_paths)
+        result["extraction_method"] = "regex"
+        return result
 
     def _download_and_prepare_images(self, event: dict, tmpdir: Path) -> list[Path]:
         """Downloads the source file and returns paths to images Tesseract can read.

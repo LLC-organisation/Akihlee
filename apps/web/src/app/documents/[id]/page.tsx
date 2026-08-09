@@ -608,7 +608,7 @@ export default function DocumentDetailPage({ params }: { params: { id: string } 
     <div className="relative min-h-screen bg-white dark:bg-canvas">
       <div className="bg-glow" />
       <AppSidebar />
-      <div className="relative z-10 lg:pl-64">
+      <div className="relative z-10 lg:pl-20">
         <main className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
           <button
             type="button"

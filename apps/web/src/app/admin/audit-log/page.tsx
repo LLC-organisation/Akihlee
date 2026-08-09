@@ -128,7 +128,7 @@ export default function AdminAuditLogPage() {
     <div className="relative min-h-screen bg-white dark:bg-canvas">
       <div className="bg-glow" />
       <AppSidebar />
-      <div className="relative z-10 lg:pl-64">
+      <div className="relative z-10 lg:pl-20">
         <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Audit Log</h1>

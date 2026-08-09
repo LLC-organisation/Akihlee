@@ -19,6 +19,7 @@ public final class AuditAction {
     public static final String DOCUMENT_APPROVED = "DOCUMENT_APPROVED";
     public static final String DOCUMENT_REJECTED = "DOCUMENT_REJECTED";
     public static final String DOCUMENT_IMPORTED = "DOCUMENT_IMPORTED";
+    public static final String DOCUMENT_DELETED = "DOCUMENT_DELETED";
     public static final String EXTRACTED_DATA_EDITED = "EXTRACTED_DATA_EDITED";
     public static final String BANK_TRANSACTION_EDITED = "BANK_TRANSACTION_EDITED";
     public static final String WHATSAPP_NUMBER_CONNECTED = "WHATSAPP_NUMBER_CONNECTED";

@@ -64,7 +64,7 @@ export default function AiCfoPage() {
     <div className="relative min-h-screen bg-white dark:bg-canvas flex flex-col">
       <div className="bg-glow" />
       <AppSidebar />
-      <div className="relative z-10 flex flex-col flex-1 lg:pl-64">
+      <div className="relative z-10 flex flex-col flex-1 lg:pl-20">
         <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-8 sm:px-6 lg:px-8 flex flex-col">
           <div className="mb-4">
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">AI CFO</h1>

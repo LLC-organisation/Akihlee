@@ -211,15 +211,17 @@ export default function Dashboard() {
 
   const filteredDocuments = useMemo(
     () =>
-      documents.filter((d) => {
-        const matchesSearch = d.filename.toLowerCase().includes(search.toLowerCase());
-        const matchesStatus =
-          statusFilter === 'ALL' ||
-          (statusFilter === 'PENDING' && (d.status === 'PROCESSING' || d.status === 'REVIEW_REQUIRED')) ||
-          (statusFilter === 'APPROVED' && d.status === 'APPROVED') ||
-          (statusFilter === 'REJECTED' && d.status === 'REJECTED');
-        return matchesSearch && matchesStatus;
-      }),
+      documents
+        .filter((d) => {
+          const matchesSearch = d.filename.toLowerCase().includes(search.toLowerCase());
+          const matchesStatus =
+            statusFilter === 'ALL' ||
+            (statusFilter === 'PENDING' && (d.status === 'PROCESSING' || d.status === 'REVIEW_REQUIRED')) ||
+            (statusFilter === 'APPROVED' && d.status === 'APPROVED') ||
+            (statusFilter === 'REJECTED' && d.status === 'REJECTED');
+          return matchesSearch && matchesStatus;
+        })
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     [documents, search, statusFilter]
   );
 
@@ -247,7 +249,7 @@ export default function Dashboard() {
     <div className="relative min-h-screen bg-white dark:bg-canvas">
       <div className="bg-glow" />
       <AppSidebar />
-      <div className="relative z-10 lg:pl-64">
+      <div className="relative z-10 lg:pl-20">
         <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
           <div className="mb-8">
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
@@ -326,7 +328,7 @@ export default function Dashboard() {
             {/* 2x2 KPI bento */}
             <div className="grid grid-cols-2 gap-4">
               <StatTile
-                bgClass="bg-accent-gradient"
+                bgClass="bg-purple-600"
                 label="Total Documents"
                 value={documents.length}
                 hint={`${documentsThisMonth} uploaded this month`}

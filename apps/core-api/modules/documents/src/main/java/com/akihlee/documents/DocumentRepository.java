@@ -21,4 +21,10 @@ public interface DocumentRepository extends JpaRepository<Document, UUID> {
      * This ensures a tenant can only access their own documents.
      */
     Optional<Document> findByIdAndTenantId(UUID id, UUID tenantId);
+
+    /**
+     * Used by analytics aggregation to scope spending figures to documents a
+     * person actually reviewed and approved, not raw (possibly wrong) OCR output.
+     */
+    List<Document> findByTenantIdAndStatus(UUID tenantId, Document.DocumentStatus status);
 }

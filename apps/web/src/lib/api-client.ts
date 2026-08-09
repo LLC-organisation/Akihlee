@@ -356,6 +356,10 @@ export const documentsApi = {
     return response.data;
   },
 
+  delete: async (id: string): Promise<void> => {
+    await apiClient.delete(`/documents/${id}`);
+  },
+
   /**
    * Fetches the original file as a blob URL for use in <img>/<a> tags.
    * A plain <img src="…/content"> can't carry the auth header and the
@@ -388,5 +392,44 @@ export const integrationsApi = {
 
   disconnectSquare: async (): Promise<void> => {
     await apiClient.delete('/integrations/square/oauth');
+  },
+};
+
+export type CategoryAmount = {
+  category: string;
+  total: number;
+};
+
+// period is "yyyy-MM-dd" or "yyyy-MM" depending on how wide the requested
+// date range was — the backend auto-picks day vs. month grouping.
+export type TrendPoint = {
+  period: string;
+  total: number;
+};
+
+export type AnalyticsDateRange = {
+  from?: string; // ISO yyyy-MM-dd
+  to?: string; // ISO yyyy-MM-dd
+};
+
+export const analyticsApi = {
+  lineItemCategories: async (range: AnalyticsDateRange): Promise<CategoryAmount[]> => {
+    const response = await apiClient.get<CategoryAmount[]>('/analytics/line-item-categories', { params: range });
+    return response.data;
+  },
+
+  lineItemTrend: async (range: AnalyticsDateRange): Promise<TrendPoint[]> => {
+    const response = await apiClient.get<TrendPoint[]>('/analytics/line-item-trend', { params: range });
+    return response.data;
+  },
+
+  bankTransactionCategories: async (range: AnalyticsDateRange): Promise<CategoryAmount[]> => {
+    const response = await apiClient.get<CategoryAmount[]>('/analytics/bank-transaction-categories', { params: range });
+    return response.data;
+  },
+
+  bankTransactionTrend: async (range: AnalyticsDateRange): Promise<TrendPoint[]> => {
+    const response = await apiClient.get<TrendPoint[]>('/analytics/bank-transaction-trend', { params: range });
+    return response.data;
   },
 };

@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.services.queue_consumer import QueueConsumer
 from app.services.ocr_service import OCRService
+from app.services.vision_extraction_service import VisionExtractionService
 from app.routers import health
 
 # Initialize services at startup
@@ -25,7 +26,12 @@ async def lifespan(app: FastAPI):
 
     # Startup: Initialize queue consumer
     ocr_service = OCRService()
-    queue_consumer = QueueConsumer(ocr_service)
+    vision_service = (
+        VisionExtractionService()
+        if settings.VISION_EXTRACTION_ENABLED and settings.OPENROUTER_API_KEY
+        else None
+    )
+    queue_consumer = QueueConsumer(ocr_service, vision_service)
     await queue_consumer.start()
 
     yield
