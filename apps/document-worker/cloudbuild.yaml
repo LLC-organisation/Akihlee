@@ -1,0 +1,94 @@
+substitutions:
+  _AR_HOSTNAME: europe-west1-docker.pkg.dev
+  _AR_PROJECT_ID: hallowed-index-504918-b4
+  _AR_REPOSITORY: cloud-run-source-deploy
+  REPO_NAME: llc-organisation-akihlee
+  _SERVICE_NAME: document-worker
+  _DEPLOY_REGION: europe-west1
+
+  # Plain (non-secret) runtime config — set these as substitution
+  # variables on the Cloud Build trigger (Console: trigger > Edit >
+  # Substitution variables, or `gcloud builds triggers update
+  # --substitutions=...`). Defaults below are dev-safe fallbacks only.
+  _CORE_API_URL: https://akihlee-api-302086001342.europe-west1.run.app
+  _DATABASE_URL: ''
+  _RABBITMQ_HOST: ''
+  _RABBITMQ_PORT: '5671'
+  _RABBITMQ_USERNAME: ''
+  _RABBITMQ_VIRTUAL_HOST: '/'
+  _RABBITMQ_SSL_ENABLED: 'true'
+  _S3_ENDPOINT: ''
+  _S3_ACCESS_KEY: ''
+  _S3_BUCKET_DOCUMENTS: ''
+  _OPENROUTER_MODEL: 'nvidia/nemotron-nano-12b-v2-vl:free'
+  _VISION_EXTRACTION_ENABLED: 'true'
+  _VISION_EXTRACTION_TIMEOUT_SECONDS: '150'
+  _OCR_CONFIDENCE_THRESHOLD: '0.7'
+  _MAX_PDF_PAGES: '5'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  substitutionOption: ALLOW_LOOSE
+
+steps:
+  - id: Pull
+    name: gcr.io/cloud-builders/docker
+    entrypoint: /bin/bash
+    args:
+      - -c
+      - docker pull $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:latest || exit 0
+
+  - id: Build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --cache-from
+      - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:latest
+      - -t
+      - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+      - -t
+      - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:latest
+      - apps/document-worker
+      - -f
+      - apps/document-worker/Dockerfile
+
+  - id: Push
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - --all-tags
+      - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME
+
+  # --no-cpu-throttling + --min-instances=1 are the load-bearing flags here —
+  # document-worker is a persistent RabbitMQ consumer, not a request-driven
+  # API, and Cloud Run's default mode freezes a container's CPU between HTTP
+  # requests. Without these, in-flight network calls (OpenRouter, the
+  # core-api callback) get frozen mid-handshake and never complete — this
+  # replaced a real incident where that's exactly what happened.
+  #
+  # --set-env-vars / --set-secrets fully REPLACE the revision's env config
+  # each deploy (not merge) — every variable the app needs has to be listed
+  # here every time, same reasoning as core-api's cloudbuild.yaml.
+  - id: Deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - $_SERVICE_NAME
+      - --image=$_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME:$COMMIT_SHA
+      - --region=$_DEPLOY_REGION
+      - --platform=managed
+      - --allow-unauthenticated
+      - --no-cpu-throttling
+      - --min-instances=1
+      - --cpu-boost
+      - --memory=1Gi
+      - --cpu=1
+      - --update-labels=managed-by=gcp-cloud-build-deploy-cloud-run,gcb-trigger-id=$_TRIGGER_ID,gcb-trigger-region=$LOCATION,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID
+      - --set-env-vars=CORE_API_URL=$_CORE_API_URL,DATABASE_URL=$_DATABASE_URL,RABBITMQ_HOST=$_RABBITMQ_HOST,RABBITMQ_PORT=$_RABBITMQ_PORT,RABBITMQ_USERNAME=$_RABBITMQ_USERNAME,RABBITMQ_VIRTUAL_HOST=$_RABBITMQ_VIRTUAL_HOST,RABBITMQ_SSL_ENABLED=$_RABBITMQ_SSL_ENABLED,S3_ENDPOINT=$_S3_ENDPOINT,S3_ACCESS_KEY=$_S3_ACCESS_KEY,S3_BUCKET_DOCUMENTS=$_S3_BUCKET_DOCUMENTS,OPENROUTER_MODEL=$_OPENROUTER_MODEL,VISION_EXTRACTION_ENABLED=$_VISION_EXTRACTION_ENABLED,VISION_EXTRACTION_TIMEOUT_SECONDS=$_VISION_EXTRACTION_TIMEOUT_SECONDS,OCR_CONFIDENCE_THRESHOLD=$_OCR_CONFIDENCE_THRESHOLD,MAX_PDF_PAGES=$_MAX_PDF_PAGES
+      - --set-secrets=RABBITMQ_PASSWORD=RABBITMQ_PASSWORD:latest,S3_SECRET_KEY=S3_SECRET_KEY:latest,INTERNAL_API_KEY=INTERNAL_API_KEY:latest,OPENROUTER_API_KEY=OPENROUTER_API_KEY:latest
+      - --quiet
+
+images:
+  - $_AR_HOSTNAME/$_AR_PROJECT_ID/$_AR_REPOSITORY/$REPO_NAME/$_SERVICE_NAME
