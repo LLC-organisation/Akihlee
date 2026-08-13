@@ -34,6 +34,9 @@ public class AdminAuditLogController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
             @PageableDefault(size = 25, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return auditLogRepository.search(actorEmail, tenantId, action, from, to, pageable);
+        String actorEmailPattern = actorEmail != null && !actorEmail.isBlank()
+                ? "%" + actorEmail.toLowerCase() + "%"
+                : null;
+        return auditLogRepository.search(actorEmailPattern, tenantId, action, from, to, pageable);
     }
 }

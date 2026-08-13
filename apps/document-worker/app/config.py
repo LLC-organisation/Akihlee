@@ -50,7 +50,11 @@ class Settings(BaseSettings):
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     OPENROUTER_MODEL: str = "nvidia/nemotron-nano-12b-v2-vl:free"
     VISION_EXTRACTION_ENABLED: bool = True
-    VISION_EXTRACTION_TIMEOUT_SECONDS: float = 60.0
+    # Free-tier models can take well over a minute to structure a
+    # content-dense page (e.g. a bank statement with 20+ transaction
+    # lines) into JSON — too short a timeout just forces a fallback to the
+    # cruder regex pipeline before the model would have actually succeeded.
+    VISION_EXTRACTION_TIMEOUT_SECONDS: float = 150.0
 
     # Core API callback (extraction results are pushed back via REST rather
     # than a second queue, so the schema stays owned in one place)
