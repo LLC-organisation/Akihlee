@@ -337,6 +337,97 @@ export const adminTenantsApi = {
   },
 };
 
+export type UserRole = 'USER' | 'ADMIN';
+
+export type UserAccountStatus = 'ACTIVE' | 'IDLE' | 'AT_RISK' | 'SUSPENDED';
+
+// There's no "name" field anywhere in this schema — User only has email —
+// so the directory/profile derive a display label from the email itself
+// rather than a real name.
+export type UserDirectoryEntry = {
+  id: string;
+  tenantId: string;
+  tenantBusinessName: string;
+  email: string;
+  role: UserRole;
+  status: UserAccountStatus;
+  registeredAt: string;
+  lastLoginAt: string | null;
+  lastActiveAt: string | null;
+  totalSessions: number;
+  // null means "no ping data yet" (not zero) — see UserActivityService.
+  avgSessionDurationMinutes: number | null;
+  documentsUploaded: number;
+  documentsApproved: number;
+  documentsRejected: number;
+  documentsProcessedTotal: number;
+};
+
+export type UserDirectoryFilters = {
+  search?: string;
+  tenantId?: string;
+  role?: UserRole;
+  sortBy?: 'lastActiveAt' | 'documentsProcessed';
+  page?: number;
+  size?: number;
+};
+
+export type UserSummary = {
+  dailyActiveUsers: number;
+  monthlyActiveUsers: number;
+  avgSessionDurationMinutes: number | null;
+  topPowerUsers: { id: string; email: string; tenantBusinessName: string; documentsProcessedTotal: number }[];
+  atRiskUsers: number;
+  totalUsers: number;
+};
+
+export type UserDetail = {
+  id: string;
+  tenantId: string;
+  tenantBusinessName: string;
+  email: string;
+  role: UserRole;
+  status: UserAccountStatus;
+  registeredAt: string;
+  // No geo-IP lookup wired up (same gap as the audit log's IP column) and
+  // no device/hardware fingerprinting anywhere in this app — userAgent is
+  // the honest stand-in for "hardware", not a fabricated device profile.
+  lastKnownIp: string | null;
+  lastKnownUserAgent: string | null;
+  lastLoginAt: string | null;
+  lastActiveAt: string | null;
+  totalSessions: number;
+  avgSessionDurationMinutes: number | null;
+  documentActivity: { uploaded: number; approved: number; rejected: number; corrected: number };
+  weeklyActivityTrend: { weekStart: string; eventCount: number }[];
+  ipHistory: { seenAt: string; ipAddress: string; userAgent: string | null; action: string }[];
+};
+
+export const adminUsersApi = {
+  list: async (filters: UserDirectoryFilters): Promise<Page<UserDirectoryEntry>> => {
+    const response = await apiClient.get<Page<UserDirectoryEntry>>('/admin/users', { params: filters });
+    return response.data;
+  },
+  summary: async (filters: Omit<UserDirectoryFilters, 'sortBy' | 'page' | 'size'>): Promise<UserSummary> => {
+    const response = await apiClient.get<UserSummary>('/admin/users/summary', { params: filters });
+    return response.data;
+  },
+  detail: async (userId: string): Promise<UserDetail> => {
+    const response = await apiClient.get<UserDetail>(`/admin/users/${userId}`);
+    return response.data;
+  },
+  activity: async (userId: string, page = 0, size = 25): Promise<Page<AuditLogEntry>> => {
+    const response = await apiClient.get<Page<AuditLogEntry>>(`/admin/users/${userId}/activity`, {
+      params: { page, size },
+    });
+    return response.data;
+  },
+  updateStatus: async (userId: string, active: boolean): Promise<UserDetail> => {
+    const response = await apiClient.patch<UserDetail>(`/admin/users/${userId}/status`, { active });
+    return response.data;
+  },
+};
+
 export const documentsApi = {
   /**
    * Upload a document (receipt, invoice, etc.)

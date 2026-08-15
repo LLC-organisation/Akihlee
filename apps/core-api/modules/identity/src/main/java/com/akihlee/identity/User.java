@@ -39,6 +39,12 @@ public class User {
     @Column(nullable = false)
     private Instant updatedAt;
 
+    // Admin-facing account status (see AdminUserController) — suspending
+    // blocks future logins (checked in AuthController) without touching
+    // any existing data or sessions already in flight for a live request.
+    @Column(nullable = false)
+    private boolean active = true;
+
     protected User() {
         // JPA requires a no-arg constructor
     }
@@ -81,6 +87,20 @@ public class User {
 
     public void changePassword(String newPasswordHash) {
         this.passwordHash = newPasswordHash;
+        this.updatedAt = Instant.now();
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public void suspend() {
+        this.active = false;
+        this.updatedAt = Instant.now();
+    }
+
+    public void reactivate() {
+        this.active = true;
         this.updatedAt = Instant.now();
     }
 }

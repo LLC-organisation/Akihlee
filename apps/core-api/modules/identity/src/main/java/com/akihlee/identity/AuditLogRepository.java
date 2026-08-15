@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Repository
@@ -50,4 +51,49 @@ public interface AuditLogRepository extends JpaRepository<AuditLogEntry, UUID> {
             @Param("to") Instant to,
             @Param("qPattern") String qPattern,
             Pageable pageable);
+
+    /** A single user's full timeline, for the admin User CRM's per-user activity tab. */
+    Page<AuditLogEntry> findByActorUserIdOrderByCreatedAtDesc(UUID actorUserId, Pageable pageable);
+
+    long countByActorUserIdAndAction(UUID actorUserId, String action);
+
+    @Query("SELECT MAX(a.createdAt) FROM AuditLogEntry a WHERE a.actorUserId = :actorUserId AND a.action = :action")
+    Instant findMaxCreatedAtByActorUserIdAndAction(@Param("actorUserId") UUID actorUserId, @Param("action") String action);
+
+    @Query("SELECT MAX(a.createdAt) FROM AuditLogEntry a WHERE a.actorUserId = :actorUserId")
+    Instant findMaxCreatedAtByActorUserId(@Param("actorUserId") UUID actorUserId);
+
+    @Query("SELECT a.createdAt FROM AuditLogEntry a WHERE a.actorUserId = :actorUserId AND a.createdAt >= :since ORDER BY a.createdAt ASC")
+    List<Instant> findTimestampsSince(@Param("actorUserId") UUID actorUserId, @Param("since") Instant since);
+
+    // Batch variants for the paginated user directory — one query per stat
+    // across the whole candidate user set, rather than N+1 per row.
+    @Query("SELECT a.actorUserId as userId, MAX(a.createdAt) as lastAt FROM AuditLogEntry a " +
+           "WHERE a.actorUserId IN :userIds AND a.action = :action GROUP BY a.actorUserId")
+    List<UserInstantRow> findMaxCreatedAtByActorUserIdInAndAction(
+            @Param("userIds") List<UUID> userIds, @Param("action") String action);
+
+    @Query("SELECT a.actorUserId as userId, MAX(a.createdAt) as lastAt FROM AuditLogEntry a " +
+           "WHERE a.actorUserId IN :userIds GROUP BY a.actorUserId")
+    List<UserInstantRow> findMaxCreatedAtByActorUserIdIn(@Param("userIds") List<UUID> userIds);
+
+    // since is optional (see the from/to CAST comment above for why an
+    // Instant compared only via "IS NULL" needs an explicit cast).
+    @Query("SELECT a.actorUserId as userId, a.action as action, COUNT(a) as cnt FROM AuditLogEntry a " +
+           "WHERE a.actorUserId IN :userIds AND a.action IN :actions " +
+           "AND (CAST(:since AS timestamp) IS NULL OR a.createdAt >= CAST(:since AS timestamp)) " +
+           "GROUP BY a.actorUserId, a.action")
+    List<UserActionCountRow> countByActorUserIdInAndActionInSince(
+            @Param("userIds") List<UUID> userIds, @Param("actions") List<String> actions, @Param("since") Instant since);
+
+    interface UserInstantRow {
+        UUID getUserId();
+        Instant getLastAt();
+    }
+
+    interface UserActionCountRow {
+        UUID getUserId();
+        String getAction();
+        long getCnt();
+    }
 }

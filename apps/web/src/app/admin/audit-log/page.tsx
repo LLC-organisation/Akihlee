@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   adminAuditLogApi,
   getAuthToken,
@@ -84,8 +84,13 @@ function describeError(err: unknown): ApiError {
   return { status: null, message: 'Unknown error — check the browser console for details.' };
 }
 
-export default function AdminAuditLogPage() {
+// useSearchParams() (read below, for a deep-link like ?actorEmail=... from
+// a user's profile page) opts the page into client-side rendering and
+// requires a Suspense boundary around anything that calls it, or `next
+// build` fails prerendering this route — see the default export below.
+function AdminAuditLogPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [checkedAuth, setCheckedAuth] = useState(false);
   const [rows, setRows] = useState<AuditLogEntry[]>([]);
   const [page, setPage] = useState(0);
@@ -96,7 +101,7 @@ export default function AdminAuditLogPage() {
   const [selectedEntry, setSelectedEntry] = useState<AuditLogEntry | null>(null);
   const [liveSync, setLiveSync] = useState(false);
 
-  const [actorEmail, setActorEmail] = useState('');
+  const [actorEmail, setActorEmail] = useState(() => searchParams.get('actorEmail') ?? '');
   const [tenant, setTenant] = useState<AdminTenantSummary | null>(null);
   const [action, setAction] = useState('');
   const [from, setFrom] = useState('');
@@ -456,5 +461,13 @@ export default function AdminAuditLogPage() {
         <AuditDetailDrawer entry={selectedEntry} onClose={() => setSelectedEntry(null)} />
       )}
     </div>
+  );
+}
+
+export default function AdminAuditLogPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminAuditLogPageContent />
+    </Suspense>
   );
 }

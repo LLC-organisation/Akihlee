@@ -27,9 +27,11 @@ import java.util.UUID;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
+    private final UserActivityService userActivityService;
 
-    public JwtAuthenticationFilter(JwtService jwtService) {
+    public JwtAuthenticationFilter(JwtService jwtService, UserActivityService userActivityService) {
         this.jwtService = jwtService;
+        this.userActivityService = userActivityService;
     }
 
     @Override
@@ -50,6 +52,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         List.of(new SimpleGrantedAuthority(role != null ? role : UserRole.USER.name()));
                 SecurityContextHolder.getContext().setAuthentication(
                         new UsernamePasswordAuthenticationToken(claims.getSubject(), null, authorities));
+                // Best-effort presence signal for the admin User CRM's session
+                // stats (see UserActivityService) — never blocks the request.
+                userActivityService.recordPing(UUID.fromString(claims.getSubject()), tenantId);
             } catch (JwtException | IllegalArgumentException ignored) {
                 // Leave the request unauthenticated; protected routes will reject it with 401.
             }

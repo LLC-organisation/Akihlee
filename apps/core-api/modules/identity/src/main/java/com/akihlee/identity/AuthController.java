@@ -60,6 +60,12 @@ public class AuthController {
                     throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
                 });
 
+        if (!user.isActive()) {
+            auditLogService.log(user.getTenantId(), user.getId(), user.getEmail(),
+                    AuditAction.LOGIN_FAILURE, "USER", user.getId().toString(), "account suspended");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This account has been suspended");
+        }
+
         Tenant tenant = tenantRepository.findById(user.getTenantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Tenant not found"));
 
