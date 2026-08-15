@@ -301,8 +301,14 @@ export type AuditLogFilters = {
   action?: string;
   from?: string; // ISO datetime
   to?: string; // ISO datetime
+  q?: string;
   page?: number;
   size?: number;
+};
+
+export type AdminTenantSummary = {
+  id: string;
+  businessName: string;
 };
 
 export const adminAuditLogApi = {
@@ -313,6 +319,19 @@ export const adminAuditLogApi = {
   search: async (filters: AuditLogFilters): Promise<Page<AuditLogEntry>> => {
     const response = await apiClient.get<Page<AuditLogEntry>>('/admin/audit-log', {
       params: filters,
+    });
+    return response.data;
+  },
+};
+
+export const adminTenantsApi = {
+  /**
+   * Admin-only tenant lookup, for picking a tenant by name/id rather than
+   * needing the UUID memorized (e.g. the audit log's tenant filter).
+   */
+  search: async (search: string, page = 0, size = 20): Promise<Page<AdminTenantSummary>> => {
+    const response = await apiClient.get<Page<AdminTenantSummary>>('/admin/tenants', {
+      params: { search: search || undefined, page, size },
     });
     return response.data;
   },
@@ -446,6 +465,26 @@ export type FinancialOverview = {
   monthlyTrend: MonthlyTrendPoint[];
 };
 
+// A line item has no stable id of its own — lineItemIndex is its position
+// within the parent ExtractedData's lineItemsJson array, which is what a
+// category override needs to find the same entry again via
+// extractedDataApi.update.
+export type CategorizedLineItem = {
+  extractedDataId: string;
+  documentId: string;
+  lineItemIndex: number;
+  date: string;
+  vendor: string | null;
+  description: string;
+  amount: number;
+  category: string;
+};
+
+export type CategoryDrilldown = {
+  lineItems: CategorizedLineItem[];
+  bankTransactions: BankTransaction[];
+};
+
 export const analyticsApi = {
   overview: async (range: AnalyticsDateRange): Promise<FinancialOverview> => {
     const response = await apiClient.get<FinancialOverview>('/analytics/overview', { params: range });
@@ -478,6 +517,14 @@ export const analyticsApi = {
    */
   combinedTrend: async (query: AnalyticsQuery): Promise<MonthlyTrendPoint[]> => {
     const response = await apiClient.get<MonthlyTrendPoint[]>('/analytics/combined-trend', { params: query });
+    return response.data;
+  },
+
+  /** Everything currently filed under one category — backs the "click a category pill to reassign" flow. */
+  categoryTransactions: async (category: string, range: AnalyticsDateRange): Promise<CategoryDrilldown> => {
+    const response = await apiClient.get<CategoryDrilldown>('/analytics/category-transactions', {
+      params: { ...range, category },
+    });
     return response.data;
   },
 };

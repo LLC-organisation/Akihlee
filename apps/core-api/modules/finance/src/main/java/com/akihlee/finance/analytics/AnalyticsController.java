@@ -71,6 +71,15 @@ public class AnalyticsController {
         return analyticsService.combinedTrend(resolveFrom(from, to), resolveTo(to), granularity);
     }
 
+    /** Everything currently filed under one category — backs the "click a category pill to reassign" flow. */
+    @GetMapping("/category-transactions")
+    public CategoryDrilldown categoryTransactions(
+            @RequestParam String category,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return analyticsService.categoryDrilldown(category, resolveFrom(from, to), resolveTo(to));
+    }
+
     private static LocalDate resolveTo(LocalDate to) {
         return to != null ? to : LocalDate.now();
     }

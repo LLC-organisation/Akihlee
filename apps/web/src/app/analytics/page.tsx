@@ -13,6 +13,7 @@ import {
   TrendPoint,
 } from '@/lib/api-client';
 import { AppSidebar } from '@/components/AppSidebar';
+import { CategoryDrilldownPanel } from '@/components/CategoryDrilldownPanel';
 import { CurrencyCode, CURRENCIES, formatCurrency } from '@/lib/utils/currency';
 import {
   formatPeriodLabel,
@@ -39,7 +40,15 @@ function EmptyState({ message }: { message: string }) {
   return <p className="text-sm text-slate-400 dark:text-slate-500 text-center py-10">{message}</p>;
 }
 
-function DonutChart({ data, currency }: { data: CategoryAmount[]; currency: CurrencyCode }) {
+function DonutChart({
+  data,
+  currency,
+  onSelectCategory,
+}: {
+  data: CategoryAmount[];
+  currency: CurrencyCode;
+  onSelectCategory: (category: string) => void;
+}) {
   if (data.length === 0) return <EmptyState message="No categorized spending in this range yet." />;
 
   const top = data.slice(0, MAX_PIE_SLICES);
@@ -74,17 +83,26 @@ function DonutChart({ data, currency }: { data: CategoryAmount[]; currency: Curr
           })}
       </svg>
       <div className="flex-1 min-w-0 space-y-1.5 w-full">
-        {slices.map((slice, i) => (
-          <div key={slice.category} className="flex items-center justify-between gap-2 text-sm">
-            <span className="flex items-center gap-2 min-w-0">
-              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: PALETTE[i % PALETTE.length] }} />
-              <span className="truncate text-slate-600 dark:text-slate-300">{slice.category}</span>
-            </span>
-            <span className="font-medium text-slate-900 dark:text-white whitespace-nowrap">
-              {formatCurrency(slice.total, currency)}
-            </span>
-          </div>
-        ))}
+        {slices.map((slice, i) => {
+          const clickable = slice.category !== 'Other';
+          return (
+            <button
+              key={slice.category}
+              type="button"
+              disabled={!clickable}
+              onClick={() => clickable && onSelectCategory(slice.category)}
+              className="flex items-center justify-between gap-2 text-sm w-full text-left disabled:cursor-default enabled:hover:opacity-70 transition-opacity duration-200"
+            >
+              <span className="flex items-center gap-2 min-w-0">
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: PALETTE[i % PALETTE.length] }} />
+                <span className="truncate text-slate-600 dark:text-slate-300">{slice.category}</span>
+              </span>
+              <span className="font-medium text-slate-900 dark:text-white whitespace-nowrap">
+                {formatCurrency(slice.total, currency)}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -201,6 +219,8 @@ export default function AnalyticsPage() {
   const [lineItemTrend, setLineItemTrend] = useState<TrendPoint[]>([]);
   const [bankCategories, setBankCategories] = useState<CategoryAmount[]>([]);
   const [bankTrend, setBankTrend] = useState<TrendPoint[]>([]);
+
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   useEffect(() => {
     if (!getAuthToken()) {
@@ -445,7 +465,11 @@ export default function AnalyticsPage() {
                     <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
                       Combined across receipts, invoices &amp; bank debits
                     </p>
-                    {loading ? <EmptyState message="Loading…" /> : <DonutChart data={overview?.categoryBreakdown ?? []} currency={currency} />}
+                    {loading ? (
+                      <EmptyState message="Loading…" />
+                    ) : (
+                      <DonutChart data={overview?.categoryBreakdown ?? []} currency={currency} onSelectCategory={setSelectedCategory} />
+                    )}
                   </div>
                   <div className={cardClasses}>
                     <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-1">Income vs. Expenses</h2>
@@ -460,7 +484,11 @@ export default function AnalyticsPage() {
                       Receipts &amp; Invoices by Category
                     </h2>
                     <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">From approved line items</p>
-                    {loading ? <EmptyState message="Loading…" /> : <DonutChart data={lineItemCategories} currency={currency} />}
+                    {loading ? (
+                      <EmptyState message="Loading…" />
+                    ) : (
+                      <DonutChart data={lineItemCategories} currency={currency} onSelectCategory={setSelectedCategory} />
+                    )}
                   </div>
 
                   <div className={cardClasses}>
@@ -476,7 +504,11 @@ export default function AnalyticsPage() {
                       Bank Spending by Category
                     </h2>
                     <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">Expense transactions from approved statements</p>
-                    {loading ? <EmptyState message="Loading…" /> : <DonutChart data={bankCategories} currency={currency} />}
+                    {loading ? (
+                      <EmptyState message="Loading…" />
+                    ) : (
+                      <DonutChart data={bankCategories} currency={currency} onSelectCategory={setSelectedCategory} />
+                    )}
                   </div>
 
                   <div className={cardClasses}>
@@ -490,6 +522,16 @@ export default function AnalyticsPage() {
           )}
         </main>
       </div>
+
+      {selectedCategory && (
+        <CategoryDrilldownPanel
+          category={selectedCategory}
+          from={from}
+          to={to}
+          onClose={() => setSelectedCategory(null)}
+          onChanged={() => load(from, to, granularity, viewMode)}
+        />
+      )}
     </div>
   );
 }

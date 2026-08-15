@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { analyticsApi, CategoryAmount, FinancialOverview, MonthlyTrendPoint } from '@/lib/api-client';
+import { CategoryDrilldownPanel } from './CategoryDrilldownPanel';
 
 const cardClasses =
   'bg-white dark:bg-surface border border-slate-200 dark:border-white/10 rounded-2xl shadow-sm dark:shadow-none p-6 transition-all duration-200';
@@ -52,7 +53,7 @@ function SummaryTile({
   );
 }
 
-function CategoryDonutChart({ data }: { data: CategoryAmount[] }) {
+function CategoryDonutChart({ data, onSelectCategory }: { data: CategoryAmount[]; onSelectCategory: (category: string) => void }) {
   if (data.length === 0) return <EmptyState message="No categorized spending in this range yet." />;
 
   const top = data.slice(0, MAX_PIE_SLICES);
@@ -87,15 +88,24 @@ function CategoryDonutChart({ data }: { data: CategoryAmount[] }) {
           })}
       </svg>
       <div className="flex-1 min-w-0 space-y-1.5 w-full">
-        {slices.map((slice, i) => (
-          <div key={slice.category} className="flex items-center justify-between gap-2 text-sm">
-            <span className="flex items-center gap-2 min-w-0">
-              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: PALETTE[i % PALETTE.length] }} />
-              <span className="truncate text-slate-600 dark:text-slate-300">{slice.category}</span>
-            </span>
-            <span className="font-medium text-slate-900 dark:text-white whitespace-nowrap">{formatCurrency(slice.total)}</span>
-          </div>
-        ))}
+        {slices.map((slice, i) => {
+          const clickable = slice.category !== 'Other';
+          return (
+            <button
+              key={slice.category}
+              type="button"
+              disabled={!clickable}
+              onClick={() => clickable && onSelectCategory(slice.category)}
+              className="flex items-center justify-between gap-2 text-sm w-full text-left disabled:cursor-default enabled:hover:opacity-70 transition-opacity duration-200"
+            >
+              <span className="flex items-center gap-2 min-w-0">
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: PALETTE[i % PALETTE.length] }} />
+                <span className="truncate text-slate-600 dark:text-slate-300">{slice.category}</span>
+              </span>
+              <span className="font-medium text-slate-900 dark:text-white whitespace-nowrap">{formatCurrency(slice.total)}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -153,6 +163,7 @@ export function FinancialAnalyticsOverview() {
   const [overview, setOverview] = useState<FinancialOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -247,7 +258,11 @@ export function FinancialAnalyticsOverview() {
         <div className={cardClasses}>
           <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-1">Expenses by Category</h3>
           <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">Top spending categories</p>
-          {loading ? <EmptyState message="Loading…" /> : <CategoryDonutChart data={overview?.categoryBreakdown ?? []} />}
+          {loading ? (
+            <EmptyState message="Loading…" />
+          ) : (
+            <CategoryDonutChart data={overview?.categoryBreakdown ?? []} onSelectCategory={setSelectedCategory} />
+          )}
         </div>
         <div className={cardClasses}>
           <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-1">Income vs. Expenses</h3>
@@ -255,6 +270,14 @@ export function FinancialAnalyticsOverview() {
           {loading ? <EmptyState message="Loading…" /> : <IncomeExpenseTrendChart data={overview?.monthlyTrend ?? []} />}
         </div>
       </div>
+
+      {selectedCategory && (
+        <CategoryDrilldownPanel
+          category={selectedCategory}
+          onClose={() => setSelectedCategory(null)}
+          onChanged={load}
+        />
+      )}
     </div>
   );
 }

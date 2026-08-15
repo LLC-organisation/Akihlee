@@ -23,6 +23,24 @@ _JSON_FENCE_PATTERN = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
 _VALID_DOCUMENT_TYPES = {"RECEIPT", "INVOICE", "BANK_STATEMENT"}
 _VALID_CURRENCIES = {"USD", "KES"}  # MVP scope: US and Kenyan markets only
 
+# Fixed SME spending taxonomy — must match apps/web/src/lib/utils/categories.ts.
+# The model is never trusted to invent a category outside this list.
+_VALID_CATEGORIES = {
+    "Meals & Entertainment",
+    "Office Supplies & Equipment",
+    "Software & IT Services",
+    "Utilities & Rent",
+    "Travel & Transportation",
+    "Inventory & Raw Materials",
+    "Marketing & Advertising",
+    "Professional Services",
+    "Uncategorized",
+}
+# Below this, a category the model proposed is discarded in favor of
+# "Uncategorized" — a person should confirm low-confidence categorizations
+# rather than have them silently reported as real spending breakdowns.
+_CATEGORY_CONFIDENCE_THRESHOLD = 0.80
+
 # Field names deliberately match what OCRService.extract_receipt_fields
 # already produces internally (merchant/date/total_amount/...) and what the
 # core-api callback expects for nested objects (lineItems' unitPrice/
@@ -53,8 +71,11 @@ visible separate from the description),
       "quantity": number or null,
       "unitPrice": number or null,
       "totalPrice": number,
-      "categoryTag": string or null (a short spending category, e.g. "Groceries", "Utilities", \
-"Office Supplies", "Transport", "Dining", "Payroll", "Rent", "Other"),
+      "categoryTag": one of "Meals & Entertainment", "Office Supplies & Equipment", \
+"Software & IT Services", "Utilities & Rent", "Travel & Transportation", "Inventory & Raw Materials", \
+"Marketing & Advertising", "Professional Services", "Uncategorized" — pick the single best-fitting \
+category strictly from this list; never invent one outside it, and use "Uncategorized" if genuinely unsure,
+      "categoryConfidence": number between 0 and 1 (your confidence in categoryTag above),
       "isTaxable": boolean or null
     },
   "bank_transactions": array of objects (only for BANK_STATEMENT; empty array otherwise), each:
@@ -64,7 +85,10 @@ visible separate from the description),
       "payeeOrPayer": string or null,
       "amount": number,
       "type": one of "INCOME", "EXPENSE", "TRANSFER",
-      "category": string or null (a short spending category)
+      "category": one of "Meals & Entertainment", "Office Supplies & Equipment", "Software & IT Services", \
+"Utilities & Rent", "Travel & Transportation", "Inventory & Raw Materials", "Marketing & Advertising", \
+"Professional Services", "Uncategorized" — same rule as categoryTag above,
+      "categoryConfidence": number between 0 and 1 (your confidence in category above)
     },
   "raw_text": string (a best-effort plain-text transcription of everything visible on the page(s)),
   "confidence": number between 0 and 1 (your own confidence that the above is accurate and complete)
@@ -74,6 +98,8 @@ Rules:
 - If a field cannot be determined, use null (or an empty array for list fields) rather than guessing.
 - Every line item needs a numeric totalPrice and every bank transaction needs a numeric amount — omit \
 an entry entirely rather than emit one without that field.
+- If your confidence in a categoryTag/category value is below 0.80, set it to "Uncategorized" and set \
+categoryConfidence accordingly, rather than guessing at a specific category.
 - Return valid JSON only. Do not wrap it in markdown code fences.
 """
 
@@ -135,6 +161,40 @@ def _encode_image(path: Path) -> str:
     return base64.b64encode(path.read_bytes()).decode("ascii")
 
 
+def _resolve_category(raw_category: Any, raw_confidence: Any) -> str:
+    """Never trust the model's own confidence-threshold judgment — enforce
+    it here even though the prompt also asks for it, same reasoning as the
+    currency/document_type clamping below (a model won't always follow
+    instructions exactly).
+    """
+    confidence = raw_confidence if isinstance(raw_confidence, (int, float)) else 0.0
+    if confidence < _CATEGORY_CONFIDENCE_THRESHOLD:
+        return "Uncategorized"
+    return raw_category if raw_category in _VALID_CATEGORIES else "Uncategorized"
+
+
+def _sanitize_line_items(line_items: list[Any]) -> list[dict[str, Any]]:
+    sanitized = []
+    for item in line_items:
+        if not isinstance(item, dict):
+            continue
+        item = dict(item)
+        item["categoryTag"] = _resolve_category(item.get("categoryTag"), item.pop("categoryConfidence", None))
+        sanitized.append(item)
+    return sanitized
+
+
+def _sanitize_bank_transactions(transactions: list[Any]) -> list[dict[str, Any]]:
+    sanitized = []
+    for txn in transactions:
+        if not isinstance(txn, dict):
+            continue
+        txn = dict(txn)
+        txn["category"] = _resolve_category(txn.get("category"), txn.pop("categoryConfidence", None))
+        sanitized.append(txn)
+    return sanitized
+
+
 def _parse_result(raw_content: str) -> dict[str, Any] | None:
     # Free-tier models don't always respect "no code fences" — strip them if present.
     cleaned = _JSON_FENCE_PATTERN.sub("", raw_content.strip()).strip()
@@ -163,8 +223,8 @@ def _parse_result(raw_content: str) -> dict[str, Any] | None:
         "currency": currency if currency in _VALID_CURRENCIES else "KES",
         "tax_amount": data.get("tax_amount"),
         "document_type": document_type if document_type in _VALID_DOCUMENT_TYPES else "RECEIPT",
-        "line_items": line_items if isinstance(line_items, list) else [],
-        "bank_transactions": bank_transactions if isinstance(bank_transactions, list) else [],
+        "line_items": _sanitize_line_items(line_items) if isinstance(line_items, list) else [],
+        "bank_transactions": _sanitize_bank_transactions(bank_transactions) if isinstance(bank_transactions, list) else [],
         "raw_text": data.get("raw_text") or "",
         "confidence": confidence if isinstance(confidence, (int, float)) and 0 <= confidence <= 1 else 0.5,
     }

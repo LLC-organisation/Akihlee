@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -182,6 +183,30 @@ public class AnalyticsService {
         return new FinancialOverview(
                 totalIncome, totalExpenses, totalIncome.subtract(totalExpenses),
                 toCategoryList(categoryTotals), monthlyTrend);
+    }
+
+    /**
+     * Every approved line item / EXPENSE bank transaction currently filed
+     * under the given category, for the "click a category pill to
+     * reassign" flow on the Analytics and Dashboard pages.
+     */
+    public CategoryDrilldown categoryDrilldown(String category, LocalDate from, LocalDate to) {
+        List<CategorizedLineItem> lineItemMatches = new ArrayList<>();
+        for (ExtractedData data : approvedExtractedData(from, to)) {
+            if (data.getTransactionDate() == null) continue;
+            List<LineItem> items = parseLineItems(data);
+            for (int i = 0; i < items.size(); i++) {
+                LineItem item = items.get(i);
+                if (item.totalPrice() == null || !categoryOf(item.categoryTag()).equals(category)) continue;
+                lineItemMatches.add(new CategorizedLineItem(
+                        data.getId(), data.getDocumentId(), i, data.getTransactionDate(),
+                        data.getMerchantName(), item.description(), item.totalPrice(), categoryOf(item.categoryTag())));
+            }
+        }
+        List<BankTransaction> bankMatches = approvedExpenseTransactions(from, to).stream()
+                .filter(txn -> categoryOf(txn.getCategory()).equals(category))
+                .toList();
+        return new CategoryDrilldown(lineItemMatches, bankMatches);
     }
 
     /** Extracted data belonging to the current tenant's APPROVED documents, filtered to the date range. */

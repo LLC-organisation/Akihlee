@@ -18,6 +18,7 @@ import { AppSidebar } from '@/components/AppSidebar';
 import { StatusBadge } from '@/components/StatusBadge';
 import { SourceBadge } from '@/components/SourceBadge';
 import { DocumentTypeBadge } from '@/components/DocumentTypeBadge';
+import { SPENDING_CATEGORIES } from '@/lib/utils/categories';
 
 const cardClasses =
   'bg-white dark:bg-surface border border-slate-200 dark:border-white/10 rounded-2xl shadow-sm dark:shadow-none transition-all duration-200';
@@ -74,7 +75,9 @@ function parseNumberInput(raw: string): number | null {
 }
 
 type EditingField = 'merchant' | 'date' | 'amount' | 'tax' | null;
-type TxnField = 'date' | 'description' | 'payee' | 'amount' | 'category';
+// 'category' isn't here — like 'type', it's a select that saves directly
+// via saveTransaction rather than going through the click-to-edit-text flow.
+type TxnField = 'date' | 'description' | 'payee' | 'amount';
 type EditingTxn = { rowId: string; field: TxnField } | null;
 
 function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -133,8 +136,6 @@ function BankTransactionsSection({
         return txn.payeeOrPayer ?? '';
       case 'amount':
         return String(txn.amount);
-      case 'category':
-        return txn.category ?? '';
     }
   };
 
@@ -182,9 +183,7 @@ function BankTransactionsSection({
           ? { description: draft || null }
           : editing.field === 'payee'
             ? { payeeOrPayer: draft || null }
-            : editing.field === 'amount'
-              ? { amount: draft.trim() ? Number(draft) : 0 }
-              : { category: draft || null };
+            : { amount: draft.trim() ? Number(draft) : 0 };
     saveTransaction(txn, overrides);
   };
 
@@ -307,7 +306,20 @@ function BankTransactionsSection({
                       <option value="TRANSFER">Transfer</option>
                     </select>
                   </td>
-                  <td className="p-1 w-32">{editableCell(txn, 'category', txn.category ?? '')}</td>
+                  <td className="p-1 w-40">
+                    <select
+                      value={txn.category ?? 'Uncategorized'}
+                      onChange={(e) => saveTransaction(txn, { category: e.target.value })}
+                      disabled={saving}
+                      className={editInputClasses}
+                    >
+                      {SPENDING_CATEGORIES.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
                   <td className="p-1 w-28 text-right">
                     {editableCell(txn, 'amount', formatAmount(txn.amount, currency), 'right')}
                   </td>
@@ -915,15 +927,18 @@ export default function DocumentDetailPage({ params }: { params: { id: string } 
                                       className={`${editInputClasses} text-right`}
                                     />
                                   </td>
-                                  <td className="p-1 w-28">
-                                    <input
-                                      type="text"
-                                      value={item.categoryTag ?? ''}
-                                      onChange={(e) =>
-                                        updateLineItemField(item.localId, 'categoryTag', e.target.value || null)
-                                      }
+                                  <td className="p-1 w-40">
+                                    <select
+                                      value={item.categoryTag ?? 'Uncategorized'}
+                                      onChange={(e) => updateLineItemField(item.localId, 'categoryTag', e.target.value)}
                                       className={editInputClasses}
-                                    />
+                                    >
+                                      {SPENDING_CATEGORIES.map((c) => (
+                                        <option key={c} value={c}>
+                                          {c}
+                                        </option>
+                                      ))}
+                                    </select>
                                   </td>
                                   <td className="p-1 text-center">
                                     <input
