@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { documentsApi, tenantApi, getAuthToken, Document } from '@/lib/api-client';
 import { StatusBadge } from '@/components/StatusBadge';
 import { AppSidebar } from '@/components/AppSidebar';
+import { FinancialAnalyticsOverview } from '@/components/FinancialAnalyticsOverview';
+import { VolatilityOverview } from '@/components/VolatilityOverview';
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB, matches the backend's configured limit
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'application/pdf'];
@@ -382,6 +384,9 @@ export default function Dashboard() {
               <StatusChart documents={documents} />
             </div>
           </div>
+
+          <FinancialAnalyticsOverview />
+          <VolatilityOverview />
 
           {/* Recent Documents */}
           <div ref={recentDocumentsRef} className={`${cardClasses} p-6 scroll-mt-6`}>

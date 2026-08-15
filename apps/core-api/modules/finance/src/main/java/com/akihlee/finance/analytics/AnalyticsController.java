@@ -34,8 +34,9 @@ public class AnalyticsController {
     @GetMapping("/line-item-trend")
     public List<TrendPoint> lineItemTrend(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        return analyticsService.lineItemTrend(resolveFrom(from, to), resolveTo(to));
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Granularity granularity) {
+        return analyticsService.lineItemTrend(resolveFrom(from, to), resolveTo(to), granularity);
     }
 
     @GetMapping("/bank-transaction-categories")
@@ -48,8 +49,26 @@ public class AnalyticsController {
     @GetMapping("/bank-transaction-trend")
     public List<TrendPoint> bankTransactionTrend(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Granularity granularity) {
+        return analyticsService.bankTransactionTrend(resolveFrom(from, to), resolveTo(to), granularity);
+    }
+
+    /** Combined income/expense summary for the dashboard's financial overview widget. */
+    @GetMapping("/overview")
+    public FinancialOverview overview(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        return analyticsService.bankTransactionTrend(resolveFrom(from, to), resolveTo(to));
+        return analyticsService.overview(resolveFrom(from, to), resolveTo(to));
+    }
+
+    /** Combined income/expense trend at an explicit granularity — powers the dashboard's volatility widget and the Analytics page's combined view. */
+    @GetMapping("/combined-trend")
+    public List<MonthlyTrendPoint> combinedTrend(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Granularity granularity) {
+        return analyticsService.combinedTrend(resolveFrom(from, to), resolveTo(to), granularity);
     }
 
     private static LocalDate resolveTo(LocalDate to) {

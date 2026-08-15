@@ -21,4 +21,11 @@ public interface BankTransactionRepository extends JpaRepository<BankTransaction
      */
     List<BankTransaction> findByExtractedDataIdInAndTypeAndTransactionDateBetween(
             List<UUID> extractedDataIds, BankTransaction.Type type, LocalDate from, LocalDate to);
+
+    /**
+     * Same use case as above but unfiltered by type — used by the combined
+     * income/expense overview, which needs INCOME and EXPENSE rows together.
+     */
+    List<BankTransaction> findByExtractedDataIdInAndTransactionDateBetween(
+            List<UUID> extractedDataIds, LocalDate from, LocalDate to);
 }

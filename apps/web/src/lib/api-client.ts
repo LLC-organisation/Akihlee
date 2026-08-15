@@ -153,7 +153,10 @@ export const aiCfoApi = {
 
 // SKU/category/taxability can't be read off a receipt by OCR — those are
 // left null by the worker and are exactly the fields review is for.
+// itemName is populated for INVOICE line items only (a short product/service
+// name distinct from the fuller description) — left null for receipts.
 export type LineItem = {
+  itemName?: string | null;
   description: string;
   sku?: string | null;
   quantity?: number | null;
@@ -412,14 +415,50 @@ export type AnalyticsDateRange = {
   to?: string; // ISO yyyy-MM-dd
 };
 
+// WEEK buckets key on the Monday of that ISO week; QUARTER buckets key on
+// "yyyy-Qn". Omit to let the backend auto-pick DAY (short ranges) or MONTH
+// (long ranges) — see AnalyticsService.resolveGranularity.
+export type Granularity = 'DAY' | 'WEEK' | 'MONTH' | 'QUARTER';
+
+export type AnalyticsQuery = AnalyticsDateRange & {
+  granularity?: Granularity;
+};
+
+// month's shape tracks whichever granularity was requested — "yyyy-MM-dd"
+// for DAY/WEEK, "yyyy-MM" for MONTH, "yyyy-Qn" for QUARTER (see
+// lib/utils/date-ranges.ts#formatPeriodLabel for rendering each case).
+export type MonthlyTrendPoint = {
+  month: string;
+  income: number;
+  expense: number;
+};
+
+// Combines line items (receipts/invoices, always spend) with bank
+// transactions (both INCOME and EXPENSE) into one set of figures — unlike
+// the per-source breakdowns above, this can double-count a receipt and the
+// bank charge that paid it, since there's no reconciliation link between
+// the two in this schema.
+export type FinancialOverview = {
+  totalIncome: number;
+  totalExpenses: number;
+  netCashFlow: number;
+  categoryBreakdown: CategoryAmount[];
+  monthlyTrend: MonthlyTrendPoint[];
+};
+
 export const analyticsApi = {
+  overview: async (range: AnalyticsDateRange): Promise<FinancialOverview> => {
+    const response = await apiClient.get<FinancialOverview>('/analytics/overview', { params: range });
+    return response.data;
+  },
+
   lineItemCategories: async (range: AnalyticsDateRange): Promise<CategoryAmount[]> => {
     const response = await apiClient.get<CategoryAmount[]>('/analytics/line-item-categories', { params: range });
     return response.data;
   },
 
-  lineItemTrend: async (range: AnalyticsDateRange): Promise<TrendPoint[]> => {
-    const response = await apiClient.get<TrendPoint[]>('/analytics/line-item-trend', { params: range });
+  lineItemTrend: async (query: AnalyticsQuery): Promise<TrendPoint[]> => {
+    const response = await apiClient.get<TrendPoint[]>('/analytics/line-item-trend', { params: query });
     return response.data;
   },
 
@@ -428,8 +467,17 @@ export const analyticsApi = {
     return response.data;
   },
 
-  bankTransactionTrend: async (range: AnalyticsDateRange): Promise<TrendPoint[]> => {
-    const response = await apiClient.get<TrendPoint[]>('/analytics/bank-transaction-trend', { params: range });
+  bankTransactionTrend: async (query: AnalyticsQuery): Promise<TrendPoint[]> => {
+    const response = await apiClient.get<TrendPoint[]>('/analytics/bank-transaction-trend', { params: query });
+    return response.data;
+  },
+
+  /**
+   * Combined income/expense trend at an explicit granularity — powers the
+   * dashboard's volatility widget and the Analytics page's combined view.
+   */
+  combinedTrend: async (query: AnalyticsQuery): Promise<MonthlyTrendPoint[]> => {
+    const response = await apiClient.get<MonthlyTrendPoint[]>('/analytics/combined-trend', { params: query });
     return response.data;
   },
 };

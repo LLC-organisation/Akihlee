@@ -133,8 +133,73 @@ export default function DocumentsPage() {
             )}
 
             {!loading && !error && documents.length > 0 && (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-slate-200 dark:divide-white/10">
+              <>
+                {/* Below `lg` (tablet/phone — the same breakpoint where
+                    AppSidebar switches to its mobile layout) a 5-column
+                    table can't fit without horizontal scroll, so this
+                    renders a stacked card per document instead. The table
+                    below covers `lg` and up, where it fits without scrolling. */}
+                <div className="lg:hidden divide-y divide-slate-100 dark:divide-white/5">
+                  {documents.map((doc) => {
+                    const href = `/documents/${doc.id}` as Route;
+                    return (
+                      <div key={doc.id} className="p-4">
+                        <div className="flex items-start gap-3">
+                          <Link href={href} className="flex items-center gap-3 min-w-0 flex-1">
+                            {fileTypeIcon(doc.contentType)}
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
+                                {doc.filename}
+                              </p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                {new Date(doc.createdAt).toLocaleString()}
+                              </p>
+                            </div>
+                          </Link>
+                          {confirmDeleteId !== doc.id && (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(doc.id)}
+                              aria-label={`Delete ${doc.filename}`}
+                              className="shrink-0 p-2 -m-2 rounded-lg text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors duration-200"
+                            >
+                              <TrashIcon />
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex items-center flex-wrap gap-2 mt-3 pl-12">
+                          <SourceBadge source={doc.source} />
+                          <StatusBadge status={doc.status} />
+                        </div>
+
+                        {confirmDeleteId === doc.id && (
+                          <div className="flex items-center gap-3 mt-3 pl-12">
+                            <span className="text-xs text-slate-500 dark:text-slate-400">Delete this document?</span>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(doc.id)}
+                              disabled={deletingId === doc.id}
+                              className="text-xs font-semibold text-red-600 dark:text-red-400 hover:underline disabled:opacity-50 disabled:pointer-events-none"
+                            >
+                              {deletingId === doc.id ? 'Deleting…' : 'Confirm'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(null)}
+                              disabled={deletingId === doc.id}
+                              className="text-xs font-medium text-slate-500 dark:text-slate-400 hover:underline disabled:opacity-50 disabled:pointer-events-none"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <table className="hidden lg:table min-w-full divide-y divide-slate-200 dark:divide-white/10">
                   <thead>
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">Document</th>
@@ -222,7 +287,7 @@ export default function DocumentsPage() {
                     })}
                   </tbody>
                 </table>
-              </div>
+              </>
             )}
           </div>
         </main>

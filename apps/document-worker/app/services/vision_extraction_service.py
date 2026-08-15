@@ -45,6 +45,9 @@ or language cues. If genuinely ambiguous, default to "KES",
   "document_type": one of "RECEIPT", "INVOICE", "BANK_STATEMENT",
   "line_items": array of objects (only for RECEIPT/INVOICE; empty array for BANK_STATEMENT), each:
     {
+      "itemName": string or null (a short product/service name, e.g. "Consulting Services" or \
+"Widget A" — only for INVOICE documents; leave null for RECEIPT line items or if no distinct name is \
+visible separate from the description),
       "description": string,
       "sku": string or null,
       "quantity": number or null,

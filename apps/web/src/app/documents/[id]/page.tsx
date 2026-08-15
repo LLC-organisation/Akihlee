@@ -544,7 +544,7 @@ export default function DocumentDetailPage({ params }: { params: { id: string } 
   const addLineItem = () => {
     setLineItems((prev) => [
       ...prev,
-      { localId: crypto.randomUUID(), description: '', totalPrice: 0 },
+      { localId: crypto.randomUUID(), itemName: null, description: '', totalPrice: 0 },
     ]);
     setLineItemsDirty(true);
   };
@@ -558,7 +558,11 @@ export default function DocumentDetailPage({ params }: { params: { id: string } 
     try {
       const cleaned: LineItem[] = lineItems
         .filter((item) => item.description.trim() !== '' || item.totalPrice !== 0)
-        .map(({ localId, ...item }) => ({ ...item, description: item.description.trim() }));
+        .map(({ localId, ...item }) => ({
+          ...item,
+          description: item.description.trim(),
+          itemName: item.itemName?.trim() || null,
+        }));
       const updated = await extractedDataApi.update(data.id, buildPayload({ lineItems: cleaned }));
       setData(updated);
       setLineItems(parseLineItems(updated.lineItemsJson));
@@ -836,6 +840,9 @@ export default function DocumentDetailPage({ params }: { params: { id: string } 
                           <table className="min-w-full text-sm">
                             <thead>
                               <tr className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                                {data.documentType === 'INVOICE' && (
+                                  <th className="px-2 py-1.5 text-left">Item Name</th>
+                                )}
                                 <th className="px-2 py-1.5 text-left">Description</th>
                                 <th className="px-2 py-1.5 text-left">SKU</th>
                                 <th className="px-2 py-1.5 text-right">Qty</th>
@@ -849,6 +856,16 @@ export default function DocumentDetailPage({ params }: { params: { id: string } 
                             <tbody>
                               {lineItems.map((item) => (
                                 <tr key={item.localId} className="border-t border-slate-100 dark:border-white/5">
+                                  {data.documentType === 'INVOICE' && (
+                                    <td className="p-1">
+                                      <input
+                                        type="text"
+                                        value={item.itemName ?? ''}
+                                        onChange={(e) => updateLineItemField(item.localId, 'itemName', e.target.value || null)}
+                                        className={editInputClasses}
+                                      />
+                                    </td>
+                                  )}
                                   <td className="p-1">
                                     <input
                                       type="text"

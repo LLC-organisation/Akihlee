@@ -179,6 +179,7 @@ class OCRService:
                     description = description[qty_match.end():].strip()
 
             items.append({
+                "itemName": None,  # not distinguishable from description via regex alone
                 "description": description or line,
                 "sku": None,
                 "quantity": quantity,
