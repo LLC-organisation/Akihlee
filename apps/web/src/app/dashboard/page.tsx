@@ -7,6 +7,7 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { AppSidebar } from '@/components/AppSidebar';
 import { FinancialAnalyticsOverview } from '@/components/FinancialAnalyticsOverview';
 import { VolatilityOverview } from '@/components/VolatilityOverview';
+import { AiCfoChatWidget } from '@/components/AiCfoChatWidget';
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB, matches the backend's configured limit
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'application/pdf'];
@@ -274,6 +275,7 @@ export default function Dashboard() {
     <div className="relative min-h-screen bg-white dark:bg-canvas">
       <div className="bg-glow" />
       <AppSidebar />
+      <AiCfoChatWidget />
       <div className="relative z-10 lg:pl-20">
         <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
           <div className="mb-8">

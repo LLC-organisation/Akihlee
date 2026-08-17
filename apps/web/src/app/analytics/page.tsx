@@ -14,6 +14,7 @@ import {
 } from '@/lib/api-client';
 import { AppSidebar } from '@/components/AppSidebar';
 import { CategoryDrilldownPanel } from '@/components/CategoryDrilldownPanel';
+import { AiCfoChatWidget } from '@/components/AiCfoChatWidget';
 import { CurrencyCode, CURRENCIES, formatCurrency } from '@/lib/utils/currency';
 import {
   formatPeriodLabel,
@@ -314,6 +315,7 @@ export default function AnalyticsPage() {
     <div className="relative min-h-screen bg-white dark:bg-canvas">
       <div className="bg-glow" />
       <AppSidebar />
+      <AiCfoChatWidget />
       <div className="relative z-10 lg:pl-20">
         <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
           <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
