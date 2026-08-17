@@ -16,12 +16,12 @@ function Logo() {
 
 function HeroPreviewCard() {
   return (
-    <div className={`${cardClasses} p-2`}>
+    <div className="flex justify-center">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/expenses-by-category-preview.png"
-        alt="Expenses by category breakdown showing top spending categories such as inventory, utilities, and professional services"
-        className="w-full h-auto rounded-xl"
+        src="/mobile-preview.jpeg"
+        alt="Akihlee dashboard running on a mobile phone, showing net cash flow and expenses by category"
+        className="w-auto max-h-[560px] rounded-2xl shadow-lg dark:shadow-black/40 border border-slate-200 dark:border-white/10"
       />
     </div>
   );
