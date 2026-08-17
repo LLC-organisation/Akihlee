@@ -73,6 +73,28 @@ public class AnalyticsService {
         return toCategoryList(totals);
     }
 
+    /**
+     * Top spending vendors by total line-item amount — bank transactions are
+     * excluded since payeeOrPayer is free-text from the statement rather
+     * than a normalized merchant name, so grouping by it wouldn't reliably
+     * roll up to the same vendor. Used by the AI CFO to name specific
+     * vendors rather than only category-level spending.
+     */
+    public List<MerchantAmount> topMerchants(LocalDate from, LocalDate to, int limit) {
+        Map<String, BigDecimal> totals = new LinkedHashMap<>();
+        for (ExtractedData data : approvedExtractedData(from, to)) {
+            if (data.getTotalAmount() == null) continue;
+            String merchant = data.getMerchantName() != null && !data.getMerchantName().isBlank()
+                    ? data.getMerchantName() : "Unknown";
+            totals.merge(merchant, data.getTotalAmount(), BigDecimal::add);
+        }
+        return totals.entrySet().stream()
+                .sorted(Map.Entry.<String, BigDecimal>comparingByValue().reversed())
+                .limit(limit)
+                .map(e -> new MerchantAmount(e.getKey(), e.getValue()))
+                .toList();
+    }
+
     /** granularity: null auto-picks DAY for short ranges, MONTH for long ones (see resolveGranularity). */
     public List<TrendPoint> lineItemTrend(LocalDate from, LocalDate to, Granularity granularity) {
         Granularity resolved = resolveGranularity(granularity, from, to);

@@ -15,6 +15,10 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     Optional<User> findByEmail(String email);
 
+    // Fan-out target for tenant-wide notifications (e.g. a document finishing
+    // OCR) — every active user in the tenant gets their own notification row.
+    List<User> findByTenantIdAndActiveTrue(UUID tenantId);
+
     // Base rows for the admin User CRM directory (see AdminUserController) —
     // deliberately not paginated here. Activity/session stats live in
     // audit_log/user_activity_pings, not on User, so sorting by them can't

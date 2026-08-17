@@ -31,17 +31,16 @@ function Logo() {
   );
 }
 
-// Tooltip shown next to an icon-only rail item on hover — the parent needs
-// `group relative` for group-hover to reach this. Decorative only (the
-// parent link/button carries the real aria-label), so this stays hidden
-// from assistive tech rather than doubling up the announced name.
-function RailTooltip({ label }: { label: string }) {
+// Label shown beside a rail item's icon once the sidebar is hovered and
+// widens — `group-hover/sidebar` targets the named group on <aside> (see
+// below), which is what's actually being hovered, not this item itself.
+// Present in the DOM (just visually faded at opacity-0) rather than
+// tooltip-style, so screen readers always get the name regardless of
+// hover state.
+function RailLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span
-      aria-hidden="true"
-      className="pointer-events-none absolute left-full top-1/2 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-slate-900 dark:bg-white px-2.5 py-1.5 text-xs font-medium text-white dark:text-canvas opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 z-30"
-    >
-      {label}
+    <span className="whitespace-nowrap opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200">
+      {children}
     </span>
   );
 }
@@ -156,31 +155,17 @@ function navLinkClasses(active: boolean): string {
   }`;
 }
 
-// Icon-only rail variant used on the desktop sidebar — square, centered.
-// The nav list that hosts these is scrollable (so the footer icons stay
-// reachable when the list is taller than the viewport), and an
-// overflow:auto ancestor clips absolutely-positioned children even when
-// they visually escape its box — so unlike the footer's rail items below,
-// these can't anchor a CSS `group-hover` tooltip off themselves. Their
-// tooltip is instead a single viewport-`fixed` element (see railTooltip
-// state), which isn't clipped by an ancestor's scroll box.
-function railLinkClasses(active: boolean): string {
-  return `flex items-center justify-center w-11 h-11 mx-auto rounded-xl transition-colors duration-200 ${
-    active
-      ? 'bg-slate-900 text-white dark:bg-white dark:text-canvas'
-      : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'
-  }`;
-}
-
 const siteLinkClasses =
   'flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white transition-colors duration-200';
+
+const logoutLinkClasses =
+  'flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 transition-colors duration-200';
 
 export function AppSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [railTooltip, setRailTooltip] = useState<{ label: string; top: number; left: number } | null>(null);
 
   useEffect(() => {
     setIsAdmin(getCurrentUserRole() === 'ADMIN');
@@ -191,15 +176,10 @@ export function AppSidebar() {
     router.push('/login');
   };
 
-  const showRailTooltip = (e: React.MouseEvent<HTMLElement>, label: string) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    setRailTooltip({ label, top: rect.top + rect.height / 2, left: rect.right + 12 });
-  };
-  const hideRailTooltip = () => setRailTooltip(null);
-
-  // `rail` renders the desktop sidebar as an icon-only strip with the label
-  // shown in a tooltip on hover, instead of the full icon+text row used by
-  // the mobile slide-down menu.
+  // `rail` renders the desktop sidebar, which sits collapsed to icon width
+  // until the whole <aside> is hovered (see `group/sidebar` there) and
+  // widens to reveal each label — as opposed to the mobile slide-down menu,
+  // which is never collapsed and just shows the icon+text row directly.
   const navItems = (onNavigate?: () => void, rail = false) => (
     <>
       {NAV_LINKS.map((link) => {
@@ -207,17 +187,9 @@ export function AppSidebar() {
           ? pathname === link.href || pathname.startsWith(`${link.href}/`)
           : pathname === link.href;
         return (
-          <Link
-            key={link.href}
-            href={link.href}
-            onClick={onNavigate}
-            onMouseEnter={rail ? (e) => showRailTooltip(e, link.label) : undefined}
-            onMouseLeave={rail ? hideRailTooltip : undefined}
-            className={rail ? railLinkClasses(active) : navLinkClasses(active)}
-            aria-label={rail ? link.label : undefined}
-          >
-            {link.icon}
-            {!rail && link.label}
+          <Link key={link.href} href={link.href} onClick={onNavigate} className={navLinkClasses(active)}>
+            <span className="shrink-0">{link.icon}</span>
+            {rail ? <RailLabel>{link.label}</RailLabel> : link.label}
           </Link>
         );
       })}
@@ -227,17 +199,9 @@ export function AppSidebar() {
             ? pathname === link.href || pathname.startsWith(`${link.href}/`)
             : pathname === link.href;
           return (
-            <Link
-              key={link.href}
-              href={link.href}
-              onClick={onNavigate}
-              onMouseEnter={rail ? (e) => showRailTooltip(e, link.label) : undefined}
-              onMouseLeave={rail ? hideRailTooltip : undefined}
-              className={rail ? railLinkClasses(active) : navLinkClasses(active)}
-              aria-label={rail ? link.label : undefined}
-            >
-              {link.icon}
-              {!rail && link.label}
+            <Link key={link.href} href={link.href} onClick={onNavigate} className={navLinkClasses(active)}>
+              <span className="shrink-0">{link.icon}</span>
+              {rail ? <RailLabel>{link.label}</RailLabel> : link.label}
             </Link>
           );
         })}
@@ -247,47 +211,40 @@ export function AppSidebar() {
   return (
     <>
       {/* Desktop sidebar — collapsed to an icon rail to keep the content
-          area wide; hover any item to see its name. */}
-      <aside className="hidden lg:flex flex-col fixed left-0 top-0 h-screen w-20 bg-white dark:bg-surface border-r border-slate-200 dark:border-white/10 px-3 py-6 z-20">
-        <Link href="/dashboard" className="flex items-center justify-center mb-8 shrink-0" aria-label="Akihlee — Dashboard">
+          area wide; hovering the whole thing (`group/sidebar`) widens it
+          and reveals every label. `overflow-hidden` is what makes that a
+          reveal instead of a reflow: labels are always in the DOM at full
+          width, just clipped at the collapsed 80px until the sidebar's
+          own width grows past them. It overlays page content while
+          expanded (fixed position, higher z-index) rather than pushing it,
+          so nothing else on the page needs to react to the hover. */}
+      <aside className="hidden lg:flex flex-col fixed left-0 top-0 h-screen w-20 hover:w-64 group/sidebar overflow-hidden transition-[width] duration-200 ease-in-out bg-white dark:bg-surface border-r border-slate-200 dark:border-white/10 px-3 py-6 z-20">
+        <Link href="/dashboard" className="flex items-center gap-2.5 px-2 mb-8 shrink-0" aria-label="Akihlee — Dashboard">
           <Logo />
+          <span className="text-lg font-bold text-slate-900 dark:text-white whitespace-nowrap opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200">
+            Akihlee
+          </span>
         </Link>
 
         <nav className="flex-1 min-h-0 flex flex-col gap-1 overflow-y-auto overflow-x-hidden">{navItems(undefined, true)}</nav>
 
-        {railTooltip && (
-          <span
-            aria-hidden="true"
-            style={{ top: railTooltip.top, left: railTooltip.left }}
-            className="fixed -translate-y-1/2 whitespace-nowrap rounded-lg bg-slate-900 dark:bg-white px-2.5 py-1.5 text-xs font-medium text-white dark:text-canvas shadow-lg pointer-events-none z-30"
-          >
-            {railTooltip.label}
-          </span>
-        )}
-
         <div className="flex flex-col gap-1 pt-4 mt-4 border-t border-slate-200 dark:border-white/10 shrink-0">
-          <a
-            href="https://www.akihlee.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Our Landing Page"
-            className="group relative flex items-center justify-center w-11 h-11 mx-auto rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white transition-colors duration-200"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
-            </svg>
-            <RailTooltip label="Our Landing Page" />
+          <a href="https://www.akihlee.com" target="_blank" rel="noopener noreferrer" className={siteLinkClasses}>
+            <span className="shrink-0">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+              </svg>
+            </span>
+            <RailLabel>Our Landing Page</RailLabel>
           </a>
-          <ThemeToggle iconOnly />
-          <button
-            onClick={handleLogout}
-            aria-label="Log out"
-            className="group relative flex items-center justify-center w-11 h-11 mx-auto rounded-xl text-slate-500 dark:text-slate-400 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 transition-colors duration-200"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
-            </svg>
-            <RailTooltip label="Log out" />
+          <ThemeToggle rail />
+          <button onClick={handleLogout} className={logoutLinkClasses}>
+            <span className="shrink-0">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
+              </svg>
+            </span>
+            <RailLabel>Log out</RailLabel>
           </button>
         </div>
       </aside>

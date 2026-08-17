@@ -13,8 +13,8 @@ type ChatMessage = {
 const WELCOME_MESSAGE: ChatMessage = {
   role: 'assistant',
   text:
-    "Hi! I'm your AI CFO — this feature is still in development, so I can't give real predictions yet. " +
-    'Ask me anything and I\'ll tell you what I can from your extracted data so far.',
+    "Hi! I'm your AI CFO. Ask me about your spending, cash flow, or where the business stands, " +
+    'and I\'ll ground the answer in your approved documents.',
 };
 
 export default function AiCfoPage() {
@@ -42,11 +42,14 @@ export default function AiCfoPage() {
     const text = input.trim();
     if (!text || sending) return;
 
+    // Drop the synthetic welcome message so history starts on a real user
+    // turn and alternates cleanly, as Bedrock's Converse API requires.
+    const history = messages.slice(1).map(({ role, text }) => ({ role, text }));
     setMessages((prev) => [...prev, { role: 'user', text }]);
     setInput('');
     setSending(true);
     try {
-      const reply = await aiCfoApi.chat(text);
+      const reply = await aiCfoApi.chat(text, history);
       setMessages((prev) => [...prev, { role: 'assistant', text: reply }]);
     } catch {
       setMessages((prev) => [
@@ -69,7 +72,7 @@ export default function AiCfoPage() {
           <div className="mb-4">
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">AI CFO</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Chat about your finances — predictions, KPIs, and cash flow, once fully built.
+              Chat about your finances — spending, cash flow, and where the business stands.
             </p>
           </div>
 

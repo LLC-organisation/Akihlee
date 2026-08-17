@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
     ocr_service = OCRService()
     vision_service = (
         VisionExtractionService()
-        if settings.VISION_EXTRACTION_ENABLED and settings.OPENROUTER_API_KEY
+        if settings.VISION_EXTRACTION_ENABLED and settings.AWS_ACCESS_KEY_ID
         else None
     )
     queue_consumer = QueueConsumer(ocr_service, vision_service)

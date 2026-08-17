@@ -26,6 +26,10 @@ dependencies {
     // HTTP client
     implementation("org.springframework.boot:spring-boot-starter-webflux")
 
+    // AI CFO chat, via Claude Sonnet 4.5 on Bedrock. Same pinned version as
+    // documents/build.gradle.kts' software.amazon.awssdk:s3, for consistency.
+    implementation("software.amazon.awssdk:bedrockruntime:2.26.20")
+
     // PostgreSQL
     runtimeOnly("org.postgresql:postgresql")
 

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { getStoredTheme, setTheme, Theme } from '@/lib/theme';
 
-export function ThemeToggle({ iconOnly = false }: { iconOnly?: boolean }) {
+export function ThemeToggle({ rail = false }: { rail?: boolean }) {
   const [theme, setThemeState] = useState<Theme>('light');
 
   useEffect(() => {
@@ -30,16 +30,21 @@ export function ThemeToggle({ iconOnly = false }: { iconOnly?: boolean }) {
       </svg>
     );
 
-  if (iconOnly) {
+  if (rail) {
+    // No local hover state needed — `group-hover/sidebar` reaches up to
+    // AppSidebar's <aside>, which is the actual thing being hovered to
+    // expand the rail. This works across the component boundary because
+    // it's a plain CSS descendant selector under the hood, not something
+    // that needs the hover state passed down as a prop.
     return (
       <button
         type="button"
         onClick={toggle}
         aria-label={label}
-        className="group relative flex items-center justify-center w-11 h-11 mx-auto rounded-xl text-slate-500 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:text-blue-700 dark:hover:text-blue-400 transition-colors duration-200"
+        className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:text-blue-700 dark:hover:text-blue-400 transition-colors duration-200"
       >
         {icon}
-        <span className="pointer-events-none absolute left-full top-1/2 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-slate-900 dark:bg-white px-2.5 py-1.5 text-xs font-medium text-white dark:text-canvas opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 z-30">
+        <span className="whitespace-nowrap opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200">
           {label}
         </span>
       </button>

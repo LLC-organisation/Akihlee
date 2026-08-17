@@ -142,7 +142,7 @@ export default function Dashboard() {
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'NEEDS_REVIEW' | 'APPROVED' | 'REJECTED'>('ALL');
   const recentDocumentsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -172,6 +172,26 @@ export default function Dashboard() {
       tenantApi.get().then((t) => setBusinessName(t.businessName)).catch(() => {});
     }
   }, [checkedAuth, loadDocuments]);
+
+  // Background refresh while OCR is still running, so a document that
+  // finishes processing shows up without the user having to click Refresh.
+  // Silent (no loadingList/listError) so it doesn't flicker the table.
+  const refreshDocumentsSilently = useCallback(async () => {
+    try {
+      const docs = await documentsApi.list();
+      setDocuments(docs);
+    } catch {
+      // background poll — surfaced errors only come from the manual/initial load
+    }
+  }, []);
+
+  const hasInFlightDocuments = documents.some((d) => d.status === 'UPLOADED' || d.status === 'PROCESSING');
+
+  useEffect(() => {
+    if (!checkedAuth || !hasInFlightDocuments) return;
+    const intervalId = setInterval(refreshDocumentsSilently, 5000);
+    return () => clearInterval(intervalId);
+  }, [checkedAuth, hasInFlightDocuments, refreshDocumentsSilently]);
 
   const uploadFile = async (file: File) => {
     setUploadSuccess(null);
@@ -218,7 +238,8 @@ export default function Dashboard() {
           const matchesSearch = d.filename.toLowerCase().includes(search.toLowerCase());
           const matchesStatus =
             statusFilter === 'ALL' ||
-            (statusFilter === 'PENDING' && (d.status === 'PROCESSING' || d.status === 'REVIEW_REQUIRED')) ||
+            (statusFilter === 'PENDING' && (d.status === 'UPLOADED' || d.status === 'PROCESSING')) ||
+            (statusFilter === 'NEEDS_REVIEW' && (d.status === 'EXTRACTED' || d.status === 'REVIEW_REQUIRED')) ||
             (statusFilter === 'APPROVED' && d.status === 'APPROVED') ||
             (statusFilter === 'REJECTED' && d.status === 'REJECTED');
           return matchesSearch && matchesStatus;
@@ -242,9 +263,11 @@ export default function Dashboard() {
     return created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear();
   }).length;
   const pendingCount = documents.filter(
-    (d) => d.status === 'PROCESSING' || d.status === 'REVIEW_REQUIRED'
+    (d) => d.status === 'UPLOADED' || d.status === 'PROCESSING'
   ).length;
-  const approvedCount = documents.filter((d) => d.status === 'APPROVED').length;
+  const needsReviewCount = documents.filter(
+    (d) => d.status === 'EXTRACTED' || d.status === 'REVIEW_REQUIRED'
+  ).length;
   const rejectedCount = documents.filter((d) => d.status === 'REJECTED').length;
 
   return (
@@ -345,7 +368,7 @@ export default function Dashboard() {
                 bgClass="bg-blue-600"
                 label="Processing Data"
                 value={pendingCount}
-                hint="Processing or needs attention"
+                hint="Still being processed"
                 onClick={() => filterAndScrollToDocuments('PENDING')}
                 icon={
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -356,9 +379,9 @@ export default function Dashboard() {
               <StatTile
                 bgClass="bg-emerald-600"
                 label="Review and Approve"
-                value={approvedCount}
-                hint="Ready for your books"
-                onClick={() => filterAndScrollToDocuments('APPROVED')}
+                value={needsReviewCount}
+                hint="Extracted, awaiting your review"
+                onClick={() => filterAndScrollToDocuments('NEEDS_REVIEW')}
                 icon={
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -399,7 +422,13 @@ export default function Dashboard() {
                     onClick={() => setStatusFilter('ALL')}
                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors duration-200"
                   >
-                    {statusFilter === 'PENDING' ? 'Processing Data' : statusFilter === 'APPROVED' ? 'Review and Approve' : 'Rejected'}
+                    {statusFilter === 'PENDING'
+                      ? 'Processing Data'
+                      : statusFilter === 'NEEDS_REVIEW'
+                        ? 'Review and Approve'
+                        : statusFilter === 'APPROVED'
+                          ? 'Approved'
+                          : 'Rejected'}
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>

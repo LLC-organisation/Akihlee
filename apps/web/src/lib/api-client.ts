@@ -144,9 +144,11 @@ export const tenantApi = {
   },
 };
 
+export type ChatTurn = { role: 'user' | 'assistant'; text: string };
+
 export const aiCfoApi = {
-  chat: async (message: string): Promise<string> => {
-    const response = await apiClient.post<{ reply: string }>('/ai-cfo/chat', { message });
+  chat: async (message: string, history: ChatTurn[] = []): Promise<string> => {
+    const response = await apiClient.post<{ reply: string }>('/ai-cfo/chat', { message, history });
     return response.data.reply;
   },
 };

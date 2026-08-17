@@ -96,6 +96,10 @@ email:
 # that hasn't connected their own Square account via OAuth below);
 # oauth.* lets individual tenants self-serve a "Connect with Square"
 # button instead of needing an env var at all.
+bedrock:
+  region: ${AWS_REGION:us-east-1}
+  model-id: ${BEDROCK_MODEL_ID:us.anthropic.claude-sonnet-4-5-20250929-v1:0}
+
 square:
   access-token: ${SQUARE_ACCESS_TOKEN:}
   environment: ${SQUARE_ENVIRONMENT:sandbox}

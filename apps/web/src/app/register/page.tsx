@@ -12,6 +12,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -100,7 +101,7 @@ export default function RegisterPage() {
               </label>
               <input
                 id="password"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 required
                 minLength={8}
                 value={password}
@@ -116,7 +117,7 @@ export default function RegisterPage() {
               </label>
               <input
                 id="confirmPassword"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 required
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
@@ -124,6 +125,16 @@ export default function RegisterPage() {
                 placeholder="Re-enter your password"
               />
             </div>
+
+            <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 select-none">
+              <input
+                type="checkbox"
+                checked={showPassword}
+                onChange={(e) => setShowPassword(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 dark:border-white/20 text-blue-600 focus:ring-blue-500 dark:bg-canvas"
+              />
+              Show passwords
+            </label>
 
             <button
               type="submit"

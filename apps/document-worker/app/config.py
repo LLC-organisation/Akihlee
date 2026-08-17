@@ -43,17 +43,22 @@ class Settings(BaseSettings):
     OCR_CONFIDENCE_THRESHOLD: float = 0.7
     MAX_PDF_PAGES: int = 5  # Bounds OCR time on long multi-page statements
 
-    # Vision-LLM extraction (primary path when configured) via OpenRouter,
-    # with the regex/Tesseract pipeline above kept as the fallback when this
-    # is unset, disabled, or the call/response fails. See VisionExtractionService.
-    OPENROUTER_API_KEY: str = ""
-    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
-    OPENROUTER_MODEL: str = "nvidia/nemotron-nano-12b-v2-vl:free"
+    # Vision-LLM extraction (primary path when configured) via AWS Bedrock
+    # (Claude Sonnet 4.5), with the regex/Tesseract pipeline above kept as
+    # the fallback when this is unset, disabled, or the call/response
+    # fails. See VisionExtractionService. AWS_ACCESS_KEY_ID is read here
+    # only to decide whether to attempt vision extraction at all — the
+    # boto3 client itself picks up credentials via the standard AWS
+    # default credential chain (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY
+    # env vars), not from this setting directly.
+    AWS_ACCESS_KEY_ID: str = ""
+    AWS_REGION: str = "us-east-1"
+    BEDROCK_MODEL_ID: str = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
     VISION_EXTRACTION_ENABLED: bool = True
-    # Free-tier models can take well over a minute to structure a
-    # content-dense page (e.g. a bank statement with 20+ transaction
-    # lines) into JSON — too short a timeout just forces a fallback to the
-    # cruder regex pipeline before the model would have actually succeeded.
+    # A content-dense page (e.g. a bank statement with 20+ transaction
+    # lines) can take a while to structure into JSON — too short a
+    # timeout just forces a fallback to the cruder regex pipeline before
+    # the model would have actually succeeded.
     VISION_EXTRACTION_TIMEOUT_SECONDS: float = 150.0
 
     # Core API callback (extraction results are pushed back via REST rather

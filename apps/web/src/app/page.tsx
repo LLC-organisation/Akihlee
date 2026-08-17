@@ -14,40 +14,15 @@ function Logo() {
   );
 }
 
-// Illustrative mock of the real extracted-data review table (see
-// /extracted-data), built from placeholder values — not a screenshot, so it
-// can't misrepresent product data while still showing the actual UI.
 function HeroPreviewCard() {
-  const rows = [
-    { merchant: 'Fresh Mart Grocers', amount: '$128.40', confidence: 96 },
-    { merchant: 'City Power & Water', amount: '$212.00', confidence: 91 },
-    { merchant: 'Njoro Hardware Ltd', amount: '$64.75', confidence: 88 },
-  ];
-
   return (
-    <div className={`${cardClasses} p-5`}>
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm font-semibold text-slate-900 dark:text-white">Extracted Data</p>
-        <span className="text-xs text-slate-400 dark:text-slate-500">Live from your uploads</span>
-      </div>
-      <div className="space-y-2">
-        {rows.map((row) => (
-          <div
-            key={row.merchant}
-            className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-white/5"
-          >
-            <span className="text-sm text-slate-700 dark:text-slate-300 truncate">{row.merchant}</span>
-            <span className="text-sm font-medium text-slate-900 dark:text-white shrink-0">{row.amount}</span>
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 shrink-0">
-              {row.confidence}%
-            </span>
-          </div>
-        ))}
-      </div>
-      <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/5 flex items-center justify-between">
-        <span className="text-sm text-slate-500 dark:text-slate-400">This month</span>
-        <span className="text-lg font-bold text-slate-900 dark:text-white">$405.15</span>
-      </div>
+    <div className={`${cardClasses} p-2`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/expenses-by-category-preview.png"
+        alt="Expenses by category breakdown showing top spending categories such as inventory, utilities, and professional services"
+        className="w-full h-auto rounded-xl"
+      />
     </div>
   );
 }

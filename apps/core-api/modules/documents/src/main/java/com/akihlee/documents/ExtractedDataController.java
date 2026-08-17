@@ -7,6 +7,7 @@ import com.akihlee.identity.User;
 import com.akihlee.identity.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -18,6 +19,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -30,6 +33,7 @@ public class ExtractedDataController {
     private final String internalApiKey;
     private final AuditLogService auditLogService;
     private final UserRepository userRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ExtractedDataController(
             ExtractedDataRepository extractedDataRepository,
@@ -38,7 +42,8 @@ public class ExtractedDataController {
             ObjectMapper objectMapper,
             @Value("${worker.api-key}") String internalApiKey,
             AuditLogService auditLogService,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            ApplicationEventPublisher eventPublisher) {
         this.extractedDataRepository = extractedDataRepository;
         this.documentRepository = documentRepository;
         this.bankTransactionRepository = bankTransactionRepository;
@@ -46,6 +51,7 @@ public class ExtractedDataController {
         this.internalApiKey = internalApiKey;
         this.auditLogService = auditLogService;
         this.userRepository = userRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -104,6 +110,13 @@ public class ExtractedDataController {
         // OCR worker is the actor, not a tenant user.
         auditLogService.log(document.getTenantId(), null, "document-worker",
                 AuditAction.DOCUMENT_STATUS_CHANGE, "DOCUMENT", document.getId().toString(), newStatus.name());
+
+        List<String> missingFields = new ArrayList<>();
+        if (data.getTotalAmount() == null) missingFields.add("Amount");
+        if (data.getTransactionDate() == null) missingFields.add("Date");
+        eventPublisher.publishEvent(new DocumentExtractionCompletedEvent(
+                document.getId(), document.getTenantId(), newStatus, data.getConfidence(),
+                missingFields, data.getMerchantName(), data.getTotalAmount()));
 
         return ResponseEntity.ok().build();
     }

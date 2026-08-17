@@ -13,6 +13,7 @@ from pdf2image import convert_from_path
 
 from app.config import settings
 from app.services.ocr_service import OCRService
+from app.services.reconciliation import _validate_and_reconcile_statement
 from app.services.vision_extraction_service import VisionExtractionService
 
 logger = logging.getLogger(__name__)
@@ -133,22 +134,25 @@ class QueueConsumer:
     async def _extract(self, image_paths: list[Path]) -> dict:
         """Vision LLM primary (if configured), regex/Tesseract fallback otherwise
         or on any vision failure — see VisionExtractionService for why a failure
-        here is expected/handled rather than exceptional (free-tier rate limits,
-        occasional non-JSON output).
+        here is expected/handled rather than exceptional (Bedrock outages/
+        timeouts, occasional non-JSON output). Either path's result is run
+        through _validate_and_reconcile_statement before returning — see
+        reconciliation.py for why that's a single shared call site rather
+        than being invoked inside each engine.
         """
         if self.vision_service is not None:
             try:
                 result = await self.vision_service.extract(image_paths)
                 if result is not None:
                     result["extraction_method"] = "vision"
-                    return result
+                    return _validate_and_reconcile_statement(result)
                 logger.warning("Vision extraction returned no usable result, falling back to OCR")
             except Exception as e:
                 logger.warning(f"Vision extraction raised, falling back to OCR: {e}")
 
         result = await self.ocr_service.extract_receipt_fields(image_paths)
         result["extraction_method"] = "regex"
-        return result
+        return _validate_and_reconcile_statement(result)
 
     def _download_and_prepare_images(self, event: dict, tmpdir: Path) -> list[Path]:
         """Downloads the source file and returns paths to images Tesseract can read.

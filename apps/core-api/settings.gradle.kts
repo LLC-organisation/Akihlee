@@ -5,5 +5,6 @@ include(
     "modules:finance",
     "modules:documents",
     "modules:ledger",
+    "modules:notifications",
     "modules:app"
 )
