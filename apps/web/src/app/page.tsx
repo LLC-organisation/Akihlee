@@ -21,7 +21,7 @@ function HeroPreviewCard() {
       <img
         src="/mobile-preview.jpeg"
         alt="Akihlee dashboard running on a mobile phone, showing net cash flow and expenses by category"
-        className="w-auto max-h-[560px] rounded-2xl shadow-lg dark:shadow-black/40 border border-slate-200 dark:border-white/10"
+        className="w-auto max-h-[560px] rounded-[44px] shadow-lg dark:shadow-black/40"
       />
     </div>
   );

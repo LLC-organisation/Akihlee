@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { Route } from 'next';
-import { extractedDataApi, getAuthToken, ExtractedData, UpdateExtractedDataRequest } from '@/lib/api-client';
+import { extractedDataApi, documentsApi, getAuthToken, Document, ExtractedData, UpdateExtractedDataRequest } from '@/lib/api-client';
 import { AppSidebar } from '@/components/AppSidebar';
 import { DocumentTypeBadge } from '@/components/DocumentTypeBadge';
 
@@ -53,10 +53,17 @@ function ConfidenceBadge({ confidence }: { confidence: number }) {
 
 type EditingCell = { rowId: string; field: 'merchant' | 'date' | 'amount' } | null;
 
+// A row's document is still "unreviewed" until a person approves/rejects it —
+// EXTRACTED/REVIEW_REQUIRED are the only statuses an ExtractedData row can
+// have here, since a document without extracted data yet wouldn't appear
+// on this page at all.
+const NEEDS_REVIEW_STATUSES: Document['status'][] = ['EXTRACTED', 'REVIEW_REQUIRED'];
+
 export default function ExtractedDataPage() {
   const router = useRouter();
   const [checkedAuth, setCheckedAuth] = useState(false);
   const [rows, setRows] = useState<ExtractedData[]>([]);
+  const [documentStatusById, setDocumentStatusById] = useState<Map<string, Document['status']>>(new Map());
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
@@ -81,8 +88,15 @@ export default function ExtractedDataPage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await extractedDataApi.list(pageToLoad, PAGE_SIZE);
+      // Review status lives on Document, not ExtractedData, so this needs
+      // a second call — documentsApi.list() already returns every document
+      // for the tenant (same call the Dashboard makes), so no new endpoint.
+      const [result, documents] = await Promise.all([
+        extractedDataApi.list(pageToLoad, PAGE_SIZE),
+        documentsApi.list(),
+      ]);
       setRows(result.content);
+      setDocumentStatusById(new Map(documents.map((d) => [d.id, d.status])));
       setTotalPages(result.totalPages);
       setTotalElements(result.totalElements);
       setPage(result.number);
@@ -170,6 +184,10 @@ export default function ExtractedDataPage() {
               this is what powers the AI CFO features. Click merchant, date, or amount to fix
               anything OCR got wrong, or open a row for the full scanned document.
             </p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 dark:bg-amber-500 shrink-0" />
+              Amber rows haven&apos;t been reviewed yet — open one to approve or reject it.
+            </p>
           </div>
 
           <div className={cardClasses}>
@@ -217,9 +235,19 @@ export default function ExtractedDataPage() {
                         // rather than wrapping the whole <tr>, since an <a> can't
                         // span multiple <td>s.
                         const href = `/documents/${row.documentId}` as Route;
+                        const needsReview = NEEDS_REVIEW_STATUSES.includes(
+                          documentStatusById.get(row.documentId) as Document['status']
+                        );
 
                         return (
-                          <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors duration-200">
+                          <tr
+                            key={row.id}
+                            className={`transition-colors duration-200 ${
+                              needsReview
+                                ? 'bg-amber-50/60 dark:bg-amber-500/[0.06] border-l-2 border-amber-400 dark:border-amber-500 hover:bg-amber-50 dark:hover:bg-amber-500/10'
+                                : 'hover:bg-slate-50 dark:hover:bg-white/5'
+                            }`}
+                          >
                             <td className="p-0">
                               <Link
                                 href={href}

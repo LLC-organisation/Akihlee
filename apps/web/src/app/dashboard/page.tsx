@@ -297,7 +297,7 @@ export default function Dashboard() {
               {uploadError && (
                 <div
                   role="alert"
-                  className="mb-3 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400 text-xs px-3 py-2"
+                  className="mb-3 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400 text-xs px-3 py-2 break-words"
                 >
                   {uploadError}
                 </div>
@@ -305,7 +305,7 @@ export default function Dashboard() {
               {uploadSuccess && (
                 <div
                   role="status"
-                  className="mb-3 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs px-3 py-2"
+                  className="mb-3 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs px-3 py-2 break-words"
                 >
                   {uploadSuccess}
                 </div>
@@ -383,7 +383,7 @@ export default function Dashboard() {
                 label="Review and Approve"
                 value={needsReviewCount}
                 hint="Extracted, awaiting your review"
-                onClick={() => filterAndScrollToDocuments('NEEDS_REVIEW')}
+                onClick={() => router.push('/extracted-data')}
                 icon={
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
