@@ -181,6 +181,9 @@ export type ExtractedData = {
   lineItemsJson: string | null;
   documentType: 'RECEIPT' | 'INVOICE' | 'BANK_STATEMENT';
   confidence: number;
+  // "vision" (Claude on Bedrock) or "regex" (Tesseract fallback) — null for
+  // rows extracted before this field existed.
+  extractionMethod: 'vision' | 'regex' | null;
   createdAt: string;
 };
 
@@ -229,11 +232,13 @@ export type UpdateExtractedDataRequest = {
 export const extractedDataApi = {
   /**
    * Paginated, tenant-scoped view of everything the OCR pipeline has
-   * extracted so far.
+   * extracted so far — newest upload first. createdAt is when this row was
+   * written (i.e. when extraction finished), the closest proxy to upload
+   * time available without a join back to Document.
    */
   list: async (page: number, size: number): Promise<Page<ExtractedData>> => {
     const response = await apiClient.get<Page<ExtractedData>>('/extracted-data', {
-      params: { page, size },
+      params: { page, size, sort: 'createdAt,desc' },
     });
     return response.data;
   },

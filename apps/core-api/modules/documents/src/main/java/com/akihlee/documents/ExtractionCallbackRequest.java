@@ -17,6 +17,7 @@ public record ExtractionCallbackRequest(
         List<BankTransactionRequest> bankTransactions, // only populated for BANK_STATEMENT
         String rawText,
         double confidence,
+        String extractionMethod, // "vision" (Claude on Bedrock) | "regex" (Tesseract fallback) | null
         String status // "EXTRACTED" or "REVIEW_REQUIRED"
 ) {
 }

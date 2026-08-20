@@ -48,6 +48,25 @@ class TestMultiColumnBankTransactions:
         # The row's own year (2025) wins over the inferred statement_year fallback.
         assert transactions[0]["transactionDate"] == "2025-08-01"
 
+    def test_recovers_row_wrapped_across_two_lines(self):
+        # End-to-end: a row Tesseract split across two physical lines is
+        # only parseable after _merge_wrapped_amount_lines stitches it back.
+        lines = [
+            "08/01 Deposit - Toast POS Daily Batch",
+            "$3,215.60 $23,950.00",
+        ]
+        merged = OCRService._merge_wrapped_amount_lines(lines)
+        transactions = OCRService._extract_bank_transactions_multi_column(merged, statement_year=2026)
+        assert len(transactions) == 1
+        assert transactions[0]["amount"] == 3215.60
+        assert transactions[0]["balance"] == 23950.00
+
+    def test_handles_misread_period_thousands_separator(self):
+        lines = ["08/01 Large Deposit $18.944.96 $40.000.00"]
+        transactions = OCRService._extract_bank_transactions_multi_column(lines, statement_year=2026)
+        assert transactions[0]["amount"] == 18944.96
+        assert transactions[0]["balance"] == 40000.00
+
 
 class TestInferStatementYear:
     def test_finds_year_in_statement_header(self):
@@ -84,3 +103,53 @@ class TestSingleColumnBankTransactionsBackwardCompatibility:
         transactions = OCRService._extract_bank_transactions(lines)
         assert transactions[0]["type"] == "EXPENSE"
         assert transactions[0]["amount"] == -500.00
+
+    def test_payout_is_not_treated_as_an_expense(self):
+        # A Square/Stripe payout landing in the account is a deposit, not a
+        # withdrawal — this was previously misclassified as EXPENSE.
+        lines = ["08/05/2026 Square Inc Payout 523.10"]
+        transactions = OCRService._extract_bank_transactions(lines)
+        assert transactions[0]["type"] == "INCOME"
+        assert transactions[0]["amount"] == 523.10
+
+
+class TestCleanAmount:
+    def test_parses_plain_amount(self):
+        assert OCRService._clean_amount("1,234.56") == 1234.56
+
+    def test_fixes_misread_period_thousands_separator(self):
+        # Tesseract occasionally emits a period instead of a comma.
+        assert OCRService._clean_amount("18.944.96") == 18944.96
+
+    def test_strips_leading_dollar_sign(self):
+        assert OCRService._clean_amount("$42.00") == 42.0
+
+    def test_no_decimal_suffix_returns_none(self):
+        assert OCRService._clean_amount("not an amount") is None
+
+
+class TestExtractBankName:
+    def test_skips_disclaimer_line_and_finds_bank_name(self):
+        lines = ["[SAMPLE / TEST DOCUMENT]", "Chase Bank, N.A.", "Account Summary"]
+        assert OCRService._extract_bank_name(lines) == "Chase Bank, N.A."
+
+    def test_falls_back_to_first_line_when_no_bank_name_found(self):
+        lines = ["Some Statement Title", "Account Summary"]
+        assert OCRService._extract_bank_name(lines) == "Some Statement Title"
+
+    def test_empty_lines_returns_none(self):
+        assert OCRService._extract_bank_name([]) is None
+
+
+class TestMergeWrappedAmountLines:
+    def test_stitches_bare_amount_line_onto_previous(self):
+        lines = [
+            "08/01 Deposit - Toast POS Daily Batch",
+            "$3,215.60 $23,950.00",
+        ]
+        merged = OCRService._merge_wrapped_amount_lines(lines)
+        assert merged == ["08/01 Deposit - Toast POS Daily Batch $3,215.60 $23,950.00"]
+
+    def test_leaves_unrelated_lines_untouched(self):
+        lines = ["Account Summary", "08/01 Deposit $100.00 $200.00"]
+        assert OCRService._merge_wrapped_amount_lines(lines) == lines

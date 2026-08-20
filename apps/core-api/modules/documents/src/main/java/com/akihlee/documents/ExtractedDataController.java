@@ -84,6 +84,7 @@ public class ExtractedDataController {
         data.setDocumentType(parseDocumentType(request.documentType()));
         data.setRawText(request.rawText());
         data.setConfidence(request.confidence());
+        data.setExtractionMethod(request.extractionMethod());
         extractedDataRepository.save(data);
 
         // Replace rather than merge: the worker only ever sends a full,

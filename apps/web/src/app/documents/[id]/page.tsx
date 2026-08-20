@@ -18,6 +18,7 @@ import { AppSidebar } from '@/components/AppSidebar';
 import { StatusBadge } from '@/components/StatusBadge';
 import { SourceBadge } from '@/components/SourceBadge';
 import { DocumentTypeBadge } from '@/components/DocumentTypeBadge';
+import { ExtractionMethodBadge } from '@/components/ExtractionMethodBadge';
 import { SPENDING_CATEGORIES } from '@/lib/utils/categories';
 
 const cardClasses =
@@ -668,6 +669,7 @@ export default function DocumentDetailPage({ params }: { params: { id: string } 
                     <SourceBadge source={doc.source} />
                     <StatusBadge status={doc.status} />
                     {data && <DocumentTypeBadge documentType={data.documentType} />}
+                    {data && <ExtractionMethodBadge extractionMethod={data.extractionMethod} />}
                   </div>
                 </div>
 

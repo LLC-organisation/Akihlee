@@ -7,6 +7,7 @@ import type { Route } from 'next';
 import { extractedDataApi, documentsApi, getAuthToken, Document, ExtractedData, UpdateExtractedDataRequest } from '@/lib/api-client';
 import { AppSidebar } from '@/components/AppSidebar';
 import { DocumentTypeBadge } from '@/components/DocumentTypeBadge';
+import { ExtractionMethodBadge } from '@/components/ExtractionMethodBadge';
 
 const PAGE_SIZE = 10;
 
@@ -223,6 +224,7 @@ export default function ExtractedDataPage() {
                         <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">Amount</th>
                         <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">Items</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">Confidence</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">Extracted Via</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-white/5">
@@ -251,7 +253,8 @@ export default function ExtractedDataPage() {
                             <td className="p-0">
                               <Link
                                 href={href}
-                                className="block px-4 py-3 text-sm text-slate-900 dark:text-white font-medium whitespace-nowrap max-w-[200px] truncate"
+                                title={row.filename}
+                                className="block px-4 py-3 text-sm text-slate-900 dark:text-white font-medium truncate max-w-[160px]"
                               >
                                 {row.filename}
                               </Link>
@@ -263,7 +266,7 @@ export default function ExtractedDataPage() {
                               </Link>
                             </td>
 
-                            <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                            <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300 max-w-[140px]">
                               {isEditingMerchant ? (
                                 <input
                                   autoFocus
@@ -279,7 +282,8 @@ export default function ExtractedDataPage() {
                                 <button
                                   type="button"
                                   onClick={() => startEdit(row, 'merchant')}
-                                  className="text-left hover:underline decoration-dashed underline-offset-2 decoration-slate-400"
+                                  title={row.merchantName ?? undefined}
+                                  className="block truncate max-w-full text-left hover:underline decoration-dashed underline-offset-2 decoration-slate-400"
                                 >
                                   {row.merchantName ?? '—'}
                                 </button>
@@ -359,6 +363,11 @@ export default function ExtractedDataPage() {
                             <td className="p-0">
                               <Link href={href} className="flex items-center px-4 py-3 whitespace-nowrap">
                                 <ConfidenceBadge confidence={row.confidence} />
+                              </Link>
+                            </td>
+                            <td className="p-0">
+                              <Link href={href} className="flex items-center px-4 py-3 whitespace-nowrap">
+                                <ExtractionMethodBadge extractionMethod={row.extractionMethod} />
                               </Link>
                             </td>
                           </tr>

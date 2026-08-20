@@ -57,6 +57,11 @@ public class ExtractedData {
 
     private double confidence;
 
+    // "vision" (Claude on Bedrock) or "regex" (Tesseract fallback) — lets a
+    // reviewer weigh how much to trust a row before it's overridden by hand.
+    @Column(name = "extraction_method")
+    private String extractionMethod;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -161,6 +166,14 @@ public class ExtractedData {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public String getExtractionMethod() {
+        return extractionMethod;
+    }
+
+    public void setExtractionMethod(String extractionMethod) {
+        this.extractionMethod = extractionMethod;
     }
 
     public enum DocumentType {

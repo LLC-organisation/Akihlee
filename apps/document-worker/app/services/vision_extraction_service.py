@@ -72,9 +72,15 @@ images that are pages of a single receipt, invoice, or bank statement. Extract t
 ONLY a JSON object (no markdown, no commentary, no code fences) matching exactly this shape:
 
 {
-  "merchant": string or null,
-  "date": string or null (ISO 8601 date, YYYY-MM-DD, the transaction/document date),
-  "total_amount": number or null,
+  "merchant": string or null — for BANK_STATEMENT, this is the financial institution's official \
+name (e.g. "JPMorgan Chase Bank, N.A.") or the account holder's name; NEVER sample/disclaimer \
+boilerplate like "[SAMPLE / TEST DOCUMENT]" or a generic document title, even if that's the most \
+prominent text on the page,
+  "date": string or null (ISO 8601 date, YYYY-MM-DD) — the transaction/document date; for \
+BANK_STATEMENT this is the statement period's end date. If a printed date is ambiguous with no \
+clear day/month labels (e.g. "08/01"), assume US month-first convention (08/01 -> August 1) unless \
+other content on the page clearly indicates a different convention,
+  "total_amount": number or null — for BANK_STATEMENT, this must equal ending_balance below,
   "currency": either "USD" or "KES" — this deployment only serves the US and Kenyan markets, so \
 never return any other code. Infer it from currency symbols/text ("$" or "USD" -> "USD"; "KSh", \
 "Ksh", "KES", or a trailing "/=" amount like "150/=" -> "KES"), the merchant's address/phone format, \
@@ -105,7 +111,8 @@ category strictly from this list; never invent one outside it, and use "Uncatego
   "bank_transactions": array of objects (only for BANK_STATEMENT; empty array otherwise) — a \
 statement is often laid out as a table with separate Deposit/Withdrawal columns plus a running \
 Balance column; read across each row rather than each column in isolation, and represent every \
-row as one object here regardless of which column its figure was under:
+row as one object here regardless of which column its figure was under. Include every transaction \
+row from every page provided — do not summarize, truncate, or skip rows on a long statement:
     {
       "transactionDate": string (ISO 8601 date, YYYY-MM-DD — infer the year from the statement's \
 header/period if a row only prints month/day),

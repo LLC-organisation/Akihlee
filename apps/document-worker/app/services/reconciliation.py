@@ -19,6 +19,7 @@ without any risk of a circular import.
 """
 
 import logging
+import re
 from datetime import datetime
 from typing import Any
 
@@ -57,15 +58,27 @@ def _normalize_date(value: Any) -> Any:
 
 def _to_number(value: Any) -> float | None:
     """Coerces an int/float straight through, and strips $/, artifacts from
-    a string a model occasionally emits instead of a bare JSON number."""
+    a string a model occasionally emits instead of a bare JSON number. Also
+    tolerates a misread thousands separator that came through as a period
+    instead of a comma (e.g. an OCR pass emitting "18.944.96" for
+    "18,944.96") — the trailing "."+2 digits is always the decimal point;
+    anything before it is digit-grouping noise regardless of which
+    punctuation mark it used.
+    """
     if isinstance(value, bool):  # bool is an int subclass — never treat True/False as an amount
         return None
     if isinstance(value, (int, float)):
         return float(value)
     if isinstance(value, str):
-        cleaned = value.replace("$", "").replace(",", "").strip()
+        cleaned = value.replace("$", "").strip()
         if not cleaned:
             return None
+        decimal_match = re.search(r"\.(\d{2})$", cleaned)
+        if decimal_match:
+            integer_part = re.sub(r"[.,]", "", cleaned[: decimal_match.start()])
+            cleaned = f"{integer_part}.{decimal_match.group(1)}"
+        else:
+            cleaned = cleaned.replace(",", "")
         try:
             return float(cleaned)
         except ValueError:
@@ -144,6 +157,14 @@ def _validate_and_reconcile_statement(data: dict[str, Any]) -> dict[str, Any]:
 
     data["beginning_balance"] = _to_number(data.get("beginning_balance"))
     data["ending_balance"] = _to_number(data.get("ending_balance"))
+
+    # The canonical "amount" for a bank statement is its ending balance, not
+    # whatever total_amount either engine happened to fill in independently
+    # — binding them here (rather than trusting each engine to do it) keeps
+    # downstream consumers (dashboards, analytics) consistent regardless of
+    # which extraction path produced the document.
+    if data["ending_balance"] is not None:
+        data["total_amount"] = data["ending_balance"]
 
     normalized_transactions = [
         txn for txn in (_normalize_transaction(t) for t in (data.get("bank_transactions") or [])) if txn is not None

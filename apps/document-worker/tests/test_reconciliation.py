@@ -29,6 +29,10 @@ class TestToNumber:
         assert _to_number("") is None
         assert _to_number("   ") is None
 
+    def test_fixes_misread_period_thousands_separator(self):
+        # A period instead of a comma for digit-grouping, e.g. from OCR.
+        assert _to_number("18.944.96") == 18944.96
+
 
 class TestNormalizeDate:
     def test_already_iso_passes_through(self):
@@ -167,3 +171,30 @@ class TestValidateAndReconcileStatement:
         # routes this to REVIEW_REQUIRED regardless of the model's own
         # self-reported confidence.
         assert result["confidence"] < 0.7
+
+    def test_total_amount_is_bound_to_ending_balance(self):
+        # total_amount is whatever either engine happened to fill in
+        # independently — ending_balance is the canonical figure for a
+        # statement and must win regardless of what total_amount said.
+        data = {
+            "document_type": "BANK_STATEMENT",
+            "total_amount": 999.99,
+            "beginning_balance": 100.0,
+            "ending_balance": 22029.66,
+            "confidence": 0.9,
+            "bank_transactions": [],
+        }
+        result = _validate_and_reconcile_statement(data)
+        assert result["total_amount"] == 22029.66
+
+    def test_total_amount_left_alone_when_ending_balance_missing(self):
+        data = {
+            "document_type": "BANK_STATEMENT",
+            "total_amount": 42.0,
+            "beginning_balance": None,
+            "ending_balance": None,
+            "confidence": 0.9,
+            "bank_transactions": [],
+        }
+        result = _validate_and_reconcile_statement(data)
+        assert result["total_amount"] == 42.0

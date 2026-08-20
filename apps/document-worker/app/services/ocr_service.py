@@ -19,9 +19,13 @@ _DATE_FORMATS = [
     "%Y-%m-%d", "%d-%m-%Y", "%d %b %Y", "%d %B %Y",
 ]
 _DATE_PATTERN = re.compile(r"\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2}|\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})\b")
-_TOTAL_LINE_PATTERN = re.compile(r"(?<!sub)(?<!sub )total[^\d]{0,10}([\d,]+\.\d{2})", re.IGNORECASE)
-_TAX_LINE_PATTERN = re.compile(r"(?:tax|vat)[^\d]{0,10}([\d,]+\.\d{2})", re.IGNORECASE)
-_AMOUNT_PATTERN = re.compile(r"\d[\d,]*\.\d{2}")
+# [\d,.]+ (not just [\d,]+) so a misread thousands separator — Tesseract
+# occasionally emits a period instead of a comma, e.g. "18.944.96" for
+# "18,944.96" — is still captured here; _clean_amount below is what actually
+# resolves which trailing ".XX" is the real decimal point.
+_TOTAL_LINE_PATTERN = re.compile(r"(?<!sub)(?<!sub )total[^\d]{0,10}([\d,.]+\.\d{2})", re.IGNORECASE)
+_TAX_LINE_PATTERN = re.compile(r"(?:tax|vat)[^\d]{0,10}([\d,.]+\.\d{2})", re.IGNORECASE)
+_AMOUNT_PATTERN = re.compile(r"\d[\d,.]*\.\d{2}")
 # MVP only serves the US and Kenyan markets, so this is deliberately just
 # USD/KES signals rather than a general currency-symbol table.
 _CURRENCY_SYMBOLS = {
@@ -41,7 +45,7 @@ _QTY_PREFIX_PATTERN = re.compile(r"^(\d+(?:\.\d+)?)\s*[x×]\s*", re.IGNORECASE)
 # column, which is tried first.
 _BANK_LINE_PATTERN = re.compile(
     r"^(?P<date>\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s+(?P<desc>.+?)\s+"
-    r"(?P<sign>-)?(?P<amount>[\d,]+\.\d{2})\s*$"
+    r"(?P<sign>-)?(?P<amount>[\d,.]+\.\d{2})\s*$"
 )
 
 # A multi-column statement row: date, description, a transaction amount,
@@ -52,20 +56,31 @@ _BANK_LINE_PATTERN = re.compile(
 _MULTI_COLUMN_BANK_LINE_PATTERN = re.compile(
     r"^(?P<date>\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?)\s+"
     r"(?P<desc>.+?)\s+"
-    r"\$?(?P<val1>[\d,]+\.\d{2})\s+"
-    r"\$?(?P<val2>[\d,]+\.\d{2})\s*$"
+    r"\$?(?P<val1>[\d,.]+\.\d{2})\s+"
+    r"\$?(?P<val2>[\d,.]+\.\d{2})\s*$"
 )
+
+# A line that's *only* one or two bare amounts, nothing else — Tesseract
+# sometimes wraps a long transaction row across two physical lines, e.g.
+# "08/01 Deposit - Toast POS Daily Batch" followed by a second line
+# "$3,215.60 $23,950.00" carrying just the amount/balance. Neither bank-line
+# pattern above can match a row split like that; see
+# _merge_wrapped_amount_lines, which stitches lines like this back onto the
+# previous one before the patterns above ever see them.
+_BARE_AMOUNTS_LINE_PATTERN = re.compile(r"^\$?[\d,.]+\.\d{2}(?:\s+\$?[\d,.]+\.\d{2})?$")
 
 # Keyword signals for which column a multi-column row's val1 belongs to,
 # since (unlike the single-column pattern) there's no unary minus sign to
-# read the direction off of directly.
+# read the direction off of directly. Deliberately excludes "payout" — for
+# an SME using Akihlee's Square integration, a "payout" line on a bank
+# statement is money a payment processor deposited IN, not an expense.
 _EXPENSE_KEYWORD_PATTERN = re.compile(
-    r"\b(debit|check|chk|purchase|payout|payroll|withdraw|ach\s*debit|pos\s*purchase|fee|charge)\b",
+    r"\b(debit|check|chk|purchase|payroll|withdraw|ach\s*debit|pos\s*purchase|fee|charge)\b",
     re.IGNORECASE,
 )
 
-_BEGINNING_BALANCE_PATTERN = re.compile(r"(?:beginning|opening)\s+balance[^\d]{0,10}([\d,]+\.\d{2})", re.IGNORECASE)
-_ENDING_BALANCE_PATTERN = re.compile(r"(?:ending|closing)\s+balance[^\d]{0,10}([\d,]+\.\d{2})", re.IGNORECASE)
+_BEGINNING_BALANCE_PATTERN = re.compile(r"(?:beginning|opening)\s+balance[^\d]{0,10}([\d,.]+\.\d{2})", re.IGNORECASE)
+_ENDING_BALANCE_PATTERN = re.compile(r"(?:ending|closing)\s+balance[^\d]{0,10}([\d,.]+\.\d{2})", re.IGNORECASE)
 _YEAR_PATTERN = re.compile(r"\b(20\d{2})\b")
 
 # Used by _parse_date_token_with_year for the multi-column pattern's dates,
@@ -78,11 +93,26 @@ _YEAR_PATTERN = re.compile(r"\b(20\d{2})\b")
 # routed through the fallback-year logic below.
 _BANK_STATEMENT_DATE_FORMATS = ["%m/%d/%Y", "%m/%d/%y", "%m/%d", "%d/%m/%Y", "%d/%m/%y", "%d/%m"]
 
+# Deliberately no literal bank names (e.g. "chase", "wells fargo") here —
+# those show up on plenty of receipts too (a card brand printed on a POS
+# receipt, an address near a bank branch), which would misclassify an
+# ordinary receipt as a bank statement. These are all statement-structure
+# terms that don't have that false-positive risk.
 _BANK_STATEMENT_KEYWORDS = (
     "account statement", "statement of account", "opening balance",
-    "closing balance", "account number", "sort code", "iban", "swift",
+    "closing balance", "beginning balance", "ending balance",
+    "statement period", "account summary", "total deposits",
+    "total withdrawals", "transaction history",
+    "account number", "sort code", "iban", "swift",
 )
 _INVOICE_KEYWORDS = ("invoice number", "invoice no", "bill to", "invoice date", "due date", "purchase order")
+
+# Real statements often lead with disclaimer/sample-document boilerplate or
+# a generic title rather than the bank's own name — see
+# OCRService._extract_bank_name, which scans for a line actually naming a
+# financial institution instead of blindly taking the first line.
+_BANK_NAME_PATTERN = re.compile(r"\b(bank|credit union|n\.?a\.?|trust company|financial)\b", re.IGNORECASE)
+_DISCLAIMER_LINE_PATTERN = re.compile(r"\b(sample|test document|specimen|void|not a real)\b", re.IGNORECASE)
 
 
 class OCRService:
@@ -122,7 +152,10 @@ class OCRService:
 
         document_type = self._classify_document_type(raw_text)
 
-        merchant = lines[0] if lines else None
+        # A receipt/invoice's first line is almost always the merchant name;
+        # a bank statement's often isn't (disclaimer/sample boilerplate or a
+        # generic document title) — see _extract_bank_name.
+        merchant = self._extract_bank_name(lines) if document_type == "BANK_STATEMENT" else (lines[0] if lines else None)
         total_amount = self._extract_total(raw_text)
         tax_amount = self._extract_amount(_TAX_LINE_PATTERN, raw_text)
         date = self._extract_date(raw_text)
@@ -139,14 +172,17 @@ class OCRService:
         ending_balance: float | None = None
         if document_type == "BANK_STATEMENT":
             statement_year = self._infer_statement_year(raw_text)
+            # Recover rows Tesseract wrapped across two physical lines
+            # before either transaction pattern below ever sees them.
+            bank_lines = self._merge_wrapped_amount_lines(lines)
             # Multi-column (date, amount, running balance) is the more
             # common real-world layout — see _extract_bank_transactions_multi_column
             # — so it's tried first; only fall back to the single trailing-
             # amount pattern if that finds nothing, to avoid emitting
             # duplicate rows for the same statement.
-            bank_transactions = self._extract_bank_transactions_multi_column(lines, statement_year)
+            bank_transactions = self._extract_bank_transactions_multi_column(bank_lines, statement_year)
             if not bank_transactions:
-                bank_transactions = self._extract_bank_transactions(lines)
+                bank_transactions = self._extract_bank_transactions(bank_lines)
             beginning_balance = self._extract_amount(_BEGINNING_BALANCE_PATTERN, raw_text)
             ending_balance = self._extract_amount(_ENDING_BALANCE_PATTERN, raw_text)
 
@@ -172,18 +208,39 @@ class OCRService:
         }
 
     @staticmethod
+    def _clean_amount(raw: str) -> float | None:
+        """Parses a currency-shaped OCR token into a float, tolerating a
+        misread thousands separator that came through as a period instead
+        of a comma (e.g. Tesseract emitting "18.944.96" for "18,944.96") —
+        the trailing "."+2 digits is always the real decimal point;
+        anything before it is digit-grouping noise to strip, regardless of
+        which punctuation mark it used.
+        """
+        cleaned = raw.strip().lstrip("$")
+        decimal_match = re.search(r"\.(\d{2})$", cleaned)
+        if not decimal_match:
+            return None
+        integer_part = re.sub(r"[.,]", "", cleaned[: decimal_match.start()])
+        try:
+            return float(f"{integer_part}.{decimal_match.group(1)}")
+        except ValueError:
+            return None
+
+    @staticmethod
     def _extract_total(text: str) -> float | None:
         match = _TOTAL_LINE_PATTERN.search(text)
         if match:
-            return float(match.group(1).replace(",", ""))
+            cleaned = OCRService._clean_amount(match.group(1))
+            if cleaned is not None:
+                return cleaned
         # Fallback: assume the largest currency-shaped number is the total.
-        amounts = [float(a.replace(",", "")) for a in _AMOUNT_PATTERN.findall(text)]
+        amounts = [a for a in (OCRService._clean_amount(t) for t in _AMOUNT_PATTERN.findall(text)) if a is not None]
         return max(amounts) if amounts else None
 
     @staticmethod
     def _extract_amount(pattern: re.Pattern, text: str) -> float | None:
         match = pattern.search(text)
-        return float(match.group(1).replace(",", "")) if match else None
+        return OCRService._clean_amount(match.group(1)) if match else None
 
     @staticmethod
     def _extract_date(text: str) -> str | None:
@@ -216,13 +273,15 @@ class OCRService:
         # those are left null for a person to fill in during review.
         items: list[dict[str, Any]] = []
         for line in lines:
-            match = re.search(r"([\d,]+\.\d{2})\s*$", line)
+            match = re.search(r"([\d,.]+\.\d{2})\s*$", line)
             if not match or re.search(
                 r"total|tax|vat|subtotal|change|cash|balance", line, re.IGNORECASE
             ):
                 continue
 
-            total_price = float(match.group(1).replace(",", ""))
+            total_price = OCRService._clean_amount(match.group(1))
+            if total_price is None:
+                continue
             description = line[: match.start()].strip(" -\t")
 
             quantity = None
@@ -257,6 +316,35 @@ class OCRService:
         return "RECEIPT"
 
     @staticmethod
+    def _extract_bank_name(lines: list[str]) -> str | None:
+        """Scans the first several lines for one that actually names a
+        financial institution, skipping disclaimer/sample-document
+        boilerplate — unlike a receipt/invoice, a bank statement's first
+        line is often a document title or "[SAMPLE / TEST DOCUMENT]" rather
+        than the bank's own name, so lines[0] isn't a safe default here.
+        Falls back to lines[0] if nothing more specific is found.
+        """
+        for line in lines[:10]:
+            if _DISCLAIMER_LINE_PATTERN.search(line):
+                continue
+            if _BANK_NAME_PATTERN.search(line):
+                return line
+        return lines[0] if lines else None
+
+    @staticmethod
+    def _merge_wrapped_amount_lines(lines: list[str]) -> list[str]:
+        """Stitches a line that's only one or two bare amounts back onto the
+        previous line — recovers transaction rows Tesseract split across
+        two physical lines (see _BARE_AMOUNTS_LINE_PATTERN)."""
+        merged: list[str] = []
+        for line in lines:
+            if merged and _BARE_AMOUNTS_LINE_PATTERN.match(line) and not _BARE_AMOUNTS_LINE_PATTERN.match(merged[-1]):
+                merged[-1] = f"{merged[-1]} {line}"
+            else:
+                merged.append(line)
+        return merged
+
+    @staticmethod
     def _extract_bank_transactions(lines: list[str]) -> list[dict[str, Any]]:
         """Single trailing-amount fallback — no separate running-balance
         column. Loose on purpose: statement layouts vary a lot, and any
@@ -272,7 +360,9 @@ class OCRService:
             if not date:
                 continue
 
-            amount = float(match.group("amount").replace(",", ""))
+            amount = OCRService._clean_amount(match.group("amount"))
+            if amount is None:
+                continue
             description = match.group("desc").strip()
             is_expense = match.group("sign") is not None or _EXPENSE_KEYWORD_PATTERN.search(line)
 
@@ -312,8 +402,10 @@ class OCRService:
             if not date:
                 continue
 
-            amount = float(match.group("val1").replace(",", ""))
-            balance = float(match.group("val2").replace(",", ""))
+            amount = OCRService._clean_amount(match.group("val1"))
+            balance = OCRService._clean_amount(match.group("val2"))
+            if amount is None or balance is None:
+                continue
             description = match.group("desc").strip(" -\t")
             is_expense = bool(_EXPENSE_KEYWORD_PATTERN.search(line))
 

@@ -193,6 +193,7 @@ class QueueConsumer:
             "bankTransactions": result.get("bank_transactions", []),
             "rawText": result.get("raw_text", ""),
             "confidence": result.get("confidence", 0.0),
+            "extractionMethod": result.get("extraction_method"),
             "status": status,
         }
         response = await self.http_client.post(
