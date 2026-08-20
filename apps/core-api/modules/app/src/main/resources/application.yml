@@ -99,6 +99,11 @@ email:
 bedrock:
   region: ${AWS_REGION:us-east-1}
   model-id: ${BEDROCK_MODEL_ID:us.anthropic.claude-sonnet-4-5-20250929-v1:0}
+  # Optional until provisioned — blank means AiCfoService.callBedrock skips
+  # attaching guardrailConfig entirely (same "unconfigured = skip" pattern
+  # as Square/Twilio/Email below). Not a secret — just an identifier.
+  guardrail-id: ${BEDROCK_GUARDRAIL_ID:}
+  guardrail-version: ${BEDROCK_GUARDRAIL_VERSION:}
 
 square:
   access-token: ${SQUARE_ACCESS_TOKEN:}

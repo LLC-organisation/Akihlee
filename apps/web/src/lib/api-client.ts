@@ -146,10 +146,45 @@ export const tenantApi = {
 
 export type ChatTurn = { role: 'user' | 'assistant'; text: string };
 
+export type AiCfoConversationSummary = {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AiCfoConversationDetail = AiCfoConversationSummary & {
+  messages: { role: 'user' | 'assistant'; text: string; createdAt: string }[];
+};
+
 export const aiCfoApi = {
+  // Stateless — used by the quick-chat widget on Dashboard/Analytics.
+  // History lives only in the caller's own state, nothing persisted.
   chat: async (message: string, history: ChatTurn[] = []): Promise<string> => {
     const response = await apiClient.post<{ reply: string }>('/ai-cfo/chat', { message, history });
     return response.data.reply;
+  },
+
+  // Persisted — used by the full /ai-cfo page.
+  listConversations: async (): Promise<AiCfoConversationSummary[]> => {
+    const response = await apiClient.get<AiCfoConversationSummary[]>('/ai-cfo/conversations');
+    return response.data;
+  },
+
+  getConversation: async (id: string): Promise<AiCfoConversationDetail> => {
+    const response = await apiClient.get<AiCfoConversationDetail>(`/ai-cfo/conversations/${id}`);
+    return response.data;
+  },
+
+  sendMessage: async (
+    conversationId: string | null,
+    message: string
+  ): Promise<{ conversationId: string; title: string; reply: string }> => {
+    const response = await apiClient.post<{ conversationId: string; title: string; reply: string }>(
+      '/ai-cfo/conversations/messages',
+      { conversationId, message }
+    );
+    return response.data;
   },
 };
 

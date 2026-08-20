@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { aiCfoApi, ChatTurn } from '@/lib/api-client';
+import { AiCfoMarkdown } from '@/components/AiCfoMarkdown';
 
 type ChatMessage = { role: 'user' | 'assistant'; text: string };
 
@@ -149,7 +150,7 @@ export function AiCfoChatWidget() {
                         : 'bg-slate-50 dark:bg-canvas border border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-200'
                     }`}
                   >
-                    {message.text}
+                    {message.role === 'assistant' ? <AiCfoMarkdown text={message.text} /> : message.text}
                   </div>
                 </div>
               ))}
