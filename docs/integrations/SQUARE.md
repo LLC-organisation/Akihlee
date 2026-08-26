@@ -81,6 +81,32 @@ if (isConnected) {
 }
 ```
 
+### 4. Connect via OAuth (per-tenant, recommended)
+
+The single shared `SQUARE_ACCESS_TOKEN` above is a fallback for one operator
+account. For a real multi-tenant deployment, each tenant instead connects
+their own Square account from the Integrations page ("Connect with Square"),
+via `SquareOAuthService`/`SquareIntegrationController`. This follows the same
+flow as [Square's official OAuth example](https://github.com/square/connect-api-examples/tree/master/connect-examples/oauth/php):
+authorize → consent → redirect back with a `code` → exchange for tokens.
+
+Configure in `.env`:
+
+```bash
+SQUARE_OAUTH_CLIENT_ID=your_sandbox_or_production_app_id
+SQUARE_OAUTH_CLIENT_SECRET=your_application_secret
+# Must exactly match a Redirect URL registered on the app (see below) —
+# defaults to this API's own callback route if unset.
+SQUARE_OAUTH_REDIRECT_URI=http://localhost:8080/api/v1/integrations/square/oauth/callback
+```
+
+On the [Developer Dashboard](https://developer.squareup.com/apps), open the
+app, switch to **Sandbox** mode, go to **OAuth**, and add the exact same URL
+under **Redirect URL**. Square validates this on both the authorize request
+and the token exchange — a mismatch (or registering it on Production while
+testing Sandbox, or vice versa) is the most common cause of the flow failing
+right after the user approves access.
+
 ## Usage
 
 ### Sync Transactions
@@ -213,6 +239,43 @@ For production:
 ### "Duplicate key violation on external_id"
 - This shouldn't happen due to idempotency check
 - If it does, check database constraints and sync logic
+
+### OAuth: 400 Bad Request from Square before the consent screen even loads
+- This means `/oauth2/authorize` itself rejected the request — nothing to
+  do with the redirect URL or token exchange (see the next entry for
+  failures *after* consent).
+- **Sandbox does not support `session=false`.** Per Square's own OAuth
+  walkthrough reference table, Production requires `session=false`, but
+  Sandbox supports *only* `session=true` (the default) and 400s on
+  `/oauth2/authorize` if `session=false` is present at all. This was an
+  actual bug in `SquareOAuthService.buildAuthorizeUrl` — it sent
+  `session=false` unconditionally regardless of environment. Fixed by
+  omitting the param entirely outside Production.
+- If it's still failing, check the raw URL the browser was sent to
+  (Network tab, not Console — a failed top-level navigation shows up there
+  as a normal `GET ... 400` request/response pair) for anything else that
+  doesn't match [Square's reference table](https://developer.squareup.com/docs/oauth-api/walkthrough):
+  wrong `client_id` prefix for the environment (`sandbox-sq0idb-...` vs
+  `sq0idb-...`), or a scope not enabled for the app.
+
+### OAuth: fails right after approving access in Square's consent screen
+- The redirect URL registered on the [Developer Dashboard](https://developer.squareup.com/apps)
+  (OAuth page, correct Sandbox/Production mode) must **exactly** match
+  `SQUARE_OAUTH_REDIRECT_URI` — protocol, host, port, and path, no trailing
+  slash difference. Square validates this both when issuing the
+  authorization code and when exchanging it for a token
+  (`SquareOAuthService.buildAuthorizeUrl`/`exchangeCodeForToken`); a mismatch
+  between the two failed silently in an earlier version of this code (the
+  redirect_uri was sent to the token exchange but never to the authorize
+  request — see commit history), which looks identical to a dashboard
+  misconfiguration from the outside.
+- Confirm you're testing against the same environment (Sandbox vs
+  Production) the app is in `SQUARE_ENVIRONMENT` — a Sandbox app's OAuth
+  redirect URL is configured separately from Production's on the dashboard.
+- Confirm the requested scopes (`PAYMENTS_READ`, `MERCHANT_PROFILE_READ` —
+  see `SquareOAuthService.OAUTH_SCOPE`) are enabled for the app; an app
+  can otherwise reject the authorize request outright before the user even
+  sees a consent screen.
 
 ## Security Considerations
 

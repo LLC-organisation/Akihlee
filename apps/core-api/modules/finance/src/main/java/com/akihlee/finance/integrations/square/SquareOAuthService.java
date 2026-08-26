@@ -75,11 +75,27 @@ public class SquareOAuthService {
         String base = production
                 ? "https://connect.squareup.com/oauth2/authorize"
                 : "https://connect.squareupsandbox.com/oauth2/authorize";
-        return base
+        // redirect_uri must be sent here too, not just at token exchange:
+        // Square's ObtainToken only accepts/validates redirect_uri when the
+        // authorize request also carried one (see SquareOAuthService class
+        // comment) — sending it in exchangeCodeForToken without it having
+        // been part of the original authorize call is what was breaking the
+        // sandbox flow (Square rejects the mismatch right after consent).
+        String url = base
                 + "?client_id=" + encode(clientId)
                 + "&scope=" + encode(OAUTH_SCOPE)
-                + "&session=false"
+                + "&redirect_uri=" + encode(redirectUri)
                 + "&state=" + encode(state);
+        // session=false is Production-only — per Square's own OAuth
+        // walkthrough reference table, Sandbox supports only session=true
+        // (the default) and rejects session=false outright with a 400 on
+        // /oauth2/authorize itself, before the user ever sees a consent
+        // screen. Omit the param entirely in Sandbox rather than sending
+        // session=true explicitly, matching what "default" means there.
+        if (production) {
+            url += "&session=false";
+        }
+        return url;
     }
 
     /** Verifies the `state` param a callback was invoked with and returns the tenant it belongs to. */
