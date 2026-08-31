@@ -29,6 +29,17 @@ spring:
     # supposed to have created.
     baseline-on-migrate: true
     baseline-version: "0"
+    # Two migrations both landed as "V14" from parallel branches that each
+    # independently picked the next version number (a real incident — see
+    # V14_1__bank_transaction_confidence.sql's history). The fix renumbered
+    # the younger one to V14_1, but by the time that fix shipped, V15-V17
+    # had already applied to the database, making V14_1 "out of order"
+    # relative to the applied high-water mark. Flyway refuses out-of-order
+    # migrations by default; this lets it backfill V14_1 once. Left enabled
+    # afterward as an ongoing safety net against a repeat of the same class
+    # of incident (two branches racing on the same version number), rather
+    # than only fixing this one occurrence.
+    out-of-order: true
   servlet:
     multipart:
       max-file-size: 10MB
