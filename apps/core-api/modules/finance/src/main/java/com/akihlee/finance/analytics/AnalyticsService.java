@@ -15,10 +15,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -229,6 +231,104 @@ public class AnalyticsService {
                 .filter(txn -> categoryOf(txn.getCategory()).equals(category))
                 .toList();
         return new CategoryDrilldown(lineItemMatches, bankMatches);
+    }
+
+    private static final int ANOMALY_LOOKBACK_WEEKS = 8;
+    // A category has to run at least 20% above its trailing weekly average
+    // to surface an alert — this is meant to catch a real, worth-a-look
+    // spike, not every week's ordinary variance.
+    private static final BigDecimal ANOMALY_THRESHOLD = new BigDecimal("0.20");
+
+    /**
+     * Flags EXPENSE categories in one bank statement that run well above the
+     * tenant's own trailing weekly average for that category — e.g. "Sysco
+     * inventory purchases are 35% above your weekly average." Compared
+     * against APPROVED history only (excluding this document itself), same
+     * "confirmed numbers only" rule as the rest of this service. Returns
+     * nothing for a category with no prior history — there's nothing to
+     * compare against yet, not evidence of anomaly-free spending.
+     */
+    public List<AnomalyAlert> detectAnomalies(UUID extractedDataId) {
+        UUID tenantId = TenantContext.getCurrentTenantId();
+        ExtractedData data = extractedDataRepository.findById(extractedDataId)
+                .filter(d -> d.getTenantId().equals(tenantId))
+                .orElse(null);
+        if (data == null || data.getTransactionDate() == null) {
+            return List.of();
+        }
+
+        Map<String, BigDecimal> currentTotals = new LinkedHashMap<>();
+        for (BankTransaction txn : bankTransactionRepository.findByExtractedDataIdOrderByTransactionDateAsc(extractedDataId)) {
+            if (txn.getType() != BankTransaction.Type.EXPENSE) continue;
+            currentTotals.merge(categoryOf(txn.getCategory()), magnitude(txn), BigDecimal::add);
+        }
+        if (currentTotals.isEmpty()) {
+            return List.of();
+        }
+
+        LocalDate statementEnd = data.getTransactionDate();
+        LocalDate historyStart = statementEnd.minusWeeks(ANOMALY_LOOKBACK_WEEKS);
+        Map<String, BigDecimal> historicalTotals = new LinkedHashMap<>();
+        for (BankTransaction txn : approvedExpenseTransactions(historyStart, statementEnd.minusDays(1))) {
+            if (txn.getExtractedDataId().equals(extractedDataId)) continue; // never compare this document against itself
+            historicalTotals.merge(categoryOf(txn.getCategory()), magnitude(txn), BigDecimal::add);
+        }
+
+        List<AnomalyAlert> alerts = new ArrayList<>();
+        for (Map.Entry<String, BigDecimal> entry : currentTotals.entrySet()) {
+            String category = entry.getKey();
+            BigDecimal current = entry.getValue();
+            BigDecimal historicalTotal = historicalTotals.get(category);
+            if (historicalTotal == null || historicalTotal.compareTo(BigDecimal.ZERO) <= 0) {
+                continue; // no prior history for this category — nothing to compare against
+            }
+            BigDecimal weeklyAverage = historicalTotal.divide(BigDecimal.valueOf(ANOMALY_LOOKBACK_WEEKS), 2, RoundingMode.HALF_UP);
+            if (weeklyAverage.compareTo(BigDecimal.ZERO) <= 0) continue;
+            BigDecimal excess = current.subtract(weeklyAverage);
+            if (excess.compareTo(weeklyAverage.multiply(ANOMALY_THRESHOLD)) <= 0) continue;
+
+            double percentAbove = excess.divide(weeklyAverage, 4, RoundingMode.HALF_UP).doubleValue() * 100;
+            String message = String.format(
+                    "%s spending ($%.2f) is %.0f%% above your typical weekly average ($%.2f).",
+                    category, current, percentAbove, weeklyAverage);
+            alerts.add(new AnomalyAlert(category, current, weeklyAverage, percentAbove, message));
+        }
+        return alerts.stream()
+                .sorted(Comparator.comparingDouble(AnomalyAlert::percentAboveAverage).reversed())
+                .toList();
+    }
+
+    private static final int PROJECTION_LOOKBACK_DAYS = 60;
+    private static final int PROJECTION_HORIZON_DAYS = 30;
+
+    /**
+     * Linear 30-day projection of cumulative net cash flow (income minus
+     * expenses), extrapolated from the tenant's own trailing 60-day daily
+     * average — deliberately the simplest model that's still honest about
+     * what it is: a straight-line continuation of recent behavior, not a
+     * seasonally-aware or ML forecast. TRANSFER rows are excluded (moving
+     * money between the business's own accounts isn't net cash flow).
+     */
+    public List<CashFlowProjection> projectedCashFlow() {
+        LocalDate today = LocalDate.now();
+        LocalDate historyStart = today.minusDays(PROJECTION_LOOKBACK_DAYS);
+
+        BigDecimal netMovement = BigDecimal.ZERO;
+        for (BankTransaction txn : approvedBankTransactions(historyStart, today)) {
+            if (txn.getType() == BankTransaction.Type.TRANSFER) continue;
+            BigDecimal signed = txn.getType() == BankTransaction.Type.INCOME ? magnitude(txn) : magnitude(txn).negate();
+            netMovement = netMovement.add(signed);
+        }
+        BigDecimal dailyAverage = netMovement.divide(BigDecimal.valueOf(PROJECTION_LOOKBACK_DAYS), 6, RoundingMode.HALF_UP);
+
+        List<CashFlowProjection> projection = new ArrayList<>();
+        BigDecimal cumulative = BigDecimal.ZERO;
+        for (int i = 1; i <= PROJECTION_HORIZON_DAYS; i++) {
+            cumulative = cumulative.add(dailyAverage);
+            projection.add(new CashFlowProjection(
+                    today.plusDays(i).format(DAY_FORMAT), cumulative.setScale(2, RoundingMode.HALF_UP)));
+        }
+        return projection;
     }
 
     /** Extracted data belonging to the current tenant's APPROVED documents, filtered to the date range. */

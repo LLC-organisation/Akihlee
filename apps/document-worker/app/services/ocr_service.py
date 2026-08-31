@@ -79,6 +79,20 @@ _EXPENSE_KEYWORD_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Known vendor/payee name -> category, checked before falling back to
+# "Uncategorized" — regex/Tesseract has no real categorization ability, but
+# a handful of very common SME vendors are worth recognizing by name
+# directly. Each entry's bool is whether that vendor is an expense; see
+# _vendor_category, which only applies a match when it agrees with the
+# row's own already-detected INCOME/EXPENSE direction, so a vendor name
+# match never contradicts the sign/keyword signal that decided that.
+_VENDOR_CATEGORY_MAP: tuple[tuple[re.Pattern, bool, str], ...] = (
+    (re.compile(r"\b(toast|square|clover)\b", re.IGNORECASE), False, "Payment Processor Payout"),
+    (re.compile(r"\b(doordash|uber\s*eats|grubhub|postmates)\b", re.IGNORECASE), False, "Delivery Platform Revenue"),
+    (re.compile(r"\b(sysco|us\s*foods|restaurant\s*depot)\b", re.IGNORECASE), True, "Inventory & Raw Materials"),
+    (re.compile(r"\b(gusto|adp|paychex)\b", re.IGNORECASE), True, "Payroll & Personnel"),
+)
+
 _BEGINNING_BALANCE_PATTERN = re.compile(r"(?:beginning|opening)\s+balance[^\d]{0,10}([\d,.]+\.\d{2})", re.IGNORECASE)
 _ENDING_BALANCE_PATTERN = re.compile(r"(?:ending|closing)\s+balance[^\d]{0,10}([\d,.]+\.\d{2})", re.IGNORECASE)
 _YEAR_PATTERN = re.compile(r"\b(20\d{2})\b")
@@ -243,6 +257,18 @@ class OCRService:
         return OCRService._clean_amount(match.group(1)) if match else None
 
     @staticmethod
+    def _vendor_category(line: str, is_expense: bool) -> str | None:
+        """Looks up a known vendor name in _VENDOR_CATEGORY_MAP, but only
+        returns a match that agrees with is_expense — the row's own sign/
+        keyword signal already decided INCOME vs EXPENSE, so a vendor name
+        is only ever used to refine the category, never to override that.
+        """
+        for pattern, vendor_is_expense, category in _VENDOR_CATEGORY_MAP:
+            if vendor_is_expense == is_expense and pattern.search(line):
+                return category
+        return None
+
+    @staticmethod
     def _extract_date(text: str) -> str | None:
         match = _DATE_PATTERN.search(text)
         if not match:
@@ -364,7 +390,10 @@ class OCRService:
             if amount is None:
                 continue
             description = match.group("desc").strip()
-            is_expense = match.group("sign") is not None or _EXPENSE_KEYWORD_PATTERN.search(line)
+            # bool(...), not a bare `or` — a bare `or` here can evaluate to
+            # the re.Match object itself rather than True, which would
+            # silently break _vendor_category's `==` comparison below.
+            is_expense = bool(match.group("sign") is not None or _EXPENSE_KEYWORD_PATTERN.search(line))
 
             transactions.append({
                 "transactionDate": date,
@@ -375,7 +404,7 @@ class OCRService:
                 "amount": -amount if is_expense else amount,
                 "type": "EXPENSE" if is_expense else "INCOME",
                 "balance": None,  # this pattern has no running-balance column
-                "category": "Uncategorized",
+                "category": OCRService._vendor_category(line, is_expense) or "Uncategorized",
                 "categoryConfidence": 0.0,
             })
         return transactions[:200]
@@ -416,7 +445,7 @@ class OCRService:
                 "amount": -amount if is_expense else amount,
                 "type": "EXPENSE" if is_expense else "INCOME",
                 "balance": balance,
-                "category": "Uncategorized",
+                "category": OCRService._vendor_category(line, is_expense) or "Uncategorized",
                 "categoryConfidence": 0.0,
             })
         return transactions[:200]

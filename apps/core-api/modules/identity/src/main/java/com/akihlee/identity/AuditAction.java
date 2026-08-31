@@ -22,6 +22,8 @@ public final class AuditAction {
     public static final String DOCUMENT_DELETED = "DOCUMENT_DELETED";
     public static final String EXTRACTED_DATA_EDITED = "EXTRACTED_DATA_EDITED";
     public static final String BANK_TRANSACTION_EDITED = "BANK_TRANSACTION_EDITED";
+    public static final String VENDOR_RULE_CREATED = "VENDOR_RULE_CREATED";
+    public static final String VENDOR_RULE_DELETED = "VENDOR_RULE_DELETED";
     public static final String WHATSAPP_NUMBER_CONNECTED = "WHATSAPP_NUMBER_CONNECTED";
     public static final String WHATSAPP_NUMBER_DISCONNECTED = "WHATSAPP_NUMBER_DISCONNECTED";
     public static final String SQUARE_CONNECTED = "SQUARE_CONNECTED";

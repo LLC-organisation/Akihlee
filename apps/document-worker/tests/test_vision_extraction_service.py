@@ -8,6 +8,7 @@ from app.services.vision_extraction_service import (
     _CATEGORY_CONFIDENCE_THRESHOLD,
     _parse_result,
     _resolve_category,
+    _sanitize_bank_transactions,
 )
 
 
@@ -28,6 +29,71 @@ class TestCategoryConfidenceThreshold:
 
     def test_rejects_categories_outside_the_fixed_taxonomy(self):
         assert _resolve_category("Not A Real Category", 0.99) == "Uncategorized"
+
+
+class TestSanitizeBankTransactionsIncomeTaxonomy:
+    def test_income_row_uses_income_taxonomy_not_spending(self):
+        # This was the original bug: an INCOME row validated against the
+        # expense-shaped taxonomy, so nothing ever fit and it always fell
+        # back to "Uncategorized" regardless of how confident the model was.
+        txns = [{
+            "type": "INCOME", "category": "Payment Processor Payout", "categoryConfidence": 0.9,
+        }]
+        result = _sanitize_bank_transactions(txns)
+        assert result[0]["category"] == "Payment Processor Payout"
+
+    def test_income_row_rejects_a_spending_category(self):
+        txns = [{"type": "INCOME", "category": "Meals & Entertainment", "categoryConfidence": 0.99}]
+        result = _sanitize_bank_transactions(txns)
+        assert result[0]["category"] == "Uncategorized"
+
+    def test_expense_row_still_uses_spending_taxonomy(self):
+        txns = [{"type": "EXPENSE", "category": "Utilities & Rent", "categoryConfidence": 0.9}]
+        result = _sanitize_bank_transactions(txns)
+        assert result[0]["category"] == "Utilities & Rent"
+
+    def test_expense_row_rejects_an_income_category(self):
+        txns = [{"type": "EXPENSE", "category": "Sales Revenue", "categoryConfidence": 0.99}]
+        result = _sanitize_bank_transactions(txns)
+        assert result[0]["category"] == "Uncategorized"
+
+    def test_payroll_is_a_valid_expense_category(self):
+        txns = [{"type": "EXPENSE", "category": "Payroll & Personnel", "categoryConfidence": 0.9}]
+        result = _sanitize_bank_transactions(txns)
+        assert result[0]["category"] == "Payroll & Personnel"
+
+    def test_delivery_platform_revenue_is_a_valid_income_category(self):
+        txns = [{"type": "INCOME", "category": "Delivery Platform Revenue", "categoryConfidence": 0.9}]
+        result = _sanitize_bank_transactions(txns)
+        assert result[0]["category"] == "Delivery Platform Revenue"
+
+    def test_client_invoices_and_services_is_a_valid_income_category(self):
+        txns = [{"type": "INCOME", "category": "Client Invoices & Services", "categoryConfidence": 0.9}]
+        result = _sanitize_bank_transactions(txns)
+        assert result[0]["category"] == "Client Invoices & Services"
+
+    def test_transfer_is_always_uncategorized_regardless_of_confidence(self):
+        txns = [{"type": "TRANSFER", "category": "Sales Revenue", "categoryConfidence": 0.99}]
+        result = _sanitize_bank_transactions(txns)
+        assert result[0]["category"] == "Uncategorized"
+
+    def test_categoryConfidence_is_persisted_not_dropped(self):
+        # Needed for the confidence-badge UI — this used to be thrown away.
+        txns = [{"type": "INCOME", "category": "Sales Revenue", "categoryConfidence": 0.9}]
+        result = _sanitize_bank_transactions(txns)
+        assert result[0]["categoryConfidence"] == 0.9
+
+    def test_transfer_confidence_is_none_not_zero(self):
+        # None means "never attempted"; a real low score (e.g. 0.1) means
+        # "attempted and scored low" — these should be distinguishable.
+        txns = [{"type": "TRANSFER", "category": "Sales Revenue", "categoryConfidence": 0.99}]
+        result = _sanitize_bank_transactions(txns)
+        assert result[0]["categoryConfidence"] is None
+
+    def test_out_of_range_confidence_normalizes_to_none(self):
+        txns = [{"type": "EXPENSE", "category": "Utilities & Rent", "categoryConfidence": 1.5}]
+        result = _sanitize_bank_transactions(txns)
+        assert result[0]["categoryConfidence"] is None
 
 
 class TestParseResultBankStatementSchema:

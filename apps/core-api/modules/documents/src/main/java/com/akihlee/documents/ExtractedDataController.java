@@ -29,6 +29,7 @@ public class ExtractedDataController {
     private final ExtractedDataRepository extractedDataRepository;
     private final DocumentRepository documentRepository;
     private final BankTransactionRepository bankTransactionRepository;
+    private final VendorRuleRepository vendorRuleRepository;
     private final ObjectMapper objectMapper;
     private final String internalApiKey;
     private final AuditLogService auditLogService;
@@ -39,6 +40,7 @@ public class ExtractedDataController {
             ExtractedDataRepository extractedDataRepository,
             DocumentRepository documentRepository,
             BankTransactionRepository bankTransactionRepository,
+            VendorRuleRepository vendorRuleRepository,
             ObjectMapper objectMapper,
             @Value("${worker.api-key}") String internalApiKey,
             AuditLogService auditLogService,
@@ -47,6 +49,7 @@ public class ExtractedDataController {
         this.extractedDataRepository = extractedDataRepository;
         this.documentRepository = documentRepository;
         this.bankTransactionRepository = bankTransactionRepository;
+        this.vendorRuleRepository = vendorRuleRepository;
         this.objectMapper = objectMapper;
         this.internalApiKey = internalApiKey;
         this.auditLogService = auditLogService;
@@ -92,12 +95,20 @@ public class ExtractedDataController {
         // rows from a previous (re-)extraction would otherwise linger.
         bankTransactionRepository.deleteByExtractedDataId(data.getId());
         if (request.bankTransactions() != null) {
+            List<VendorRule> vendorRules = vendorRuleRepository.findByTenantIdOrderByCreatedAtDesc(document.getTenantId());
             for (BankTransactionRequest txn : request.bankTransactions()) {
+                VendorRule matchedRule = matchVendorRule(txn, vendorRules);
+                // A saved rule wins over the AI's own guess for this row —
+                // it's a human's explicit, standing correction, not another
+                // extraction attempt, so it's stamped fully confident.
+                BankTransaction.Type type = matchedRule != null ? matchedRule.getType() : BankTransaction.Type.valueOf(txn.type());
+                String category = matchedRule != null ? matchedRule.getCategory() : txn.category();
+                Double confidence = matchedRule != null ? 1.0 : txn.categoryConfidence();
                 bankTransactionRepository.save(new BankTransaction(
                         data.getId(), document.getTenantId(),
                         LocalDate.parse(txn.transactionDate()),
                         txn.description(), txn.payeeOrPayer(), txn.amount(),
-                        BankTransaction.Type.valueOf(txn.type()), txn.category()));
+                        type, category, confidence));
             }
         }
 
@@ -195,6 +206,26 @@ public class ExtractedDataController {
     private String currentUserEmail() {
         UUID userId = currentUserId();
         return userId != null ? userRepository.findById(userId).map(User::getEmail).orElse(null) : null;
+    }
+
+    /**
+     * Case-insensitive substring match against payeeOrPayer (falling back
+     * to description) — first rule to match wins. rules is small (one
+     * tenant's worth) and this runs at most once per statement's worth of
+     * rows, so a linear scan per row is fine without an index/cache.
+     */
+    private VendorRule matchVendorRule(BankTransactionRequest txn, List<VendorRule> rules) {
+        String haystack = ((txn.payeeOrPayer() != null ? txn.payeeOrPayer() : "") + " "
+                + (txn.description() != null ? txn.description() : "")).toLowerCase();
+        if (haystack.isBlank()) {
+            return null;
+        }
+        for (VendorRule rule : rules) {
+            if (haystack.contains(rule.getVendorPattern().toLowerCase())) {
+                return rule;
+            }
+        }
+        return null;
     }
 
     private ExtractedData.DocumentType parseDocumentType(String value) {

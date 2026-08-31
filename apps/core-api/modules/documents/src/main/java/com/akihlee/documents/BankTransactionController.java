@@ -51,11 +51,14 @@ public class BankTransactionController {
         UUID tenantId = TenantContext.getCurrentTenantId();
         requireOwnedExtractedData(extractedDataId);
 
+        // 1.0, not request.categoryConfidence() — a manually-added row was
+        // never auto-categorized, so it's inherently as trusted as a human
+        // review gets.
         BankTransaction txn = new BankTransaction(
                 extractedDataId, tenantId, LocalDate.parse(request.transactionDate()),
                 request.description(), request.payeeOrPayer(),
                 request.amount() != null ? request.amount() : BigDecimal.ZERO,
-                parseType(request.type()), request.category());
+                parseType(request.type()), request.category(), 1.0);
         bankTransactionRepository.save(txn);
 
         auditLogService.log(tenantId, currentUserId(), currentUserEmail(),
@@ -77,6 +80,9 @@ public class BankTransactionController {
         txn.setAmount(request.amount());
         txn.setType(parseType(request.type()));
         txn.setCategory(request.category());
+        // Any edit to this row is a human review action on the whole row —
+        // same reasoning as create() above, not just for category edits.
+        txn.setCategoryConfidence(1.0);
         bankTransactionRepository.save(txn);
 
         auditLogService.log(tenantId, currentUserId(), currentUserEmail(),

@@ -11,6 +11,7 @@ import {
   Granularity,
   MonthlyTrendPoint,
   TrendPoint,
+  CashFlowProjection,
 } from '@/lib/api-client';
 import { AppSidebar } from '@/components/AppSidebar';
 import { CategoryDrilldownPanel } from '@/components/CategoryDrilldownPanel';
@@ -211,6 +212,63 @@ function CombinedTrendChart({
   );
 }
 
+// Single-series line chart for the 30-day cash-flow projection. Dashed
+// stroke + "Projected" labeling signal this is a forecast, not recorded
+// data — reuses the app's income/expense green/red rather than inventing a
+// new hue, since "is this trajectory healthy" is exactly a status signal.
+function CashFlowProjectionChart({ data, currency }: { data: CashFlowProjection[]; currency: CurrencyCode }) {
+  if (data.length === 0) return <EmptyState message="Not enough approved transaction history yet to project a trend." />;
+
+  const width = 600;
+  const height = 160;
+  const pad = 8;
+  const values = data.map((d) => d.projectedNet);
+  const min = Math.min(0, ...values);
+  const max = Math.max(0, ...values);
+  const span = max - min || 1;
+
+  const points = data.map((d, i) => ({
+    x: pad + (i / (data.length - 1)) * (width - pad * 2),
+    y: height - pad - ((d.projectedNet - min) / span) * (height - pad * 2),
+    point: d,
+  }));
+  const zeroY = height - pad - ((0 - min) / span) * (height - pad * 2);
+  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+  const last = points[points.length - 1];
+  const first = points[0];
+  const areaPath = `${linePath} L ${last.x.toFixed(1)} ${zeroY.toFixed(1)} L ${first.x.toFixed(1)} ${zeroY.toFixed(1)} Z`;
+  const trendColor = last.point.projectedNet >= 0 ? '#10B981' : '#EF4444';
+
+  return (
+    <div>
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-40" preserveAspectRatio="none">
+        <line
+          x1={pad} y1={zeroY} x2={width - pad} y2={zeroY}
+          stroke="currentColor" strokeWidth={1} className="text-slate-200 dark:text-white/10"
+        />
+        <path d={areaPath} fill={trendColor} fillOpacity={0.08} stroke="none" />
+        <path
+          d={linePath} fill="none" stroke={trendColor} strokeWidth={2}
+          strokeDasharray="5 4" strokeLinecap="round" strokeLinejoin="round"
+        />
+        {points
+          .filter((_, i) => i % 5 === 0 || i === points.length - 1)
+          .map((p) => (
+            <circle key={p.point.date} cx={p.x} cy={p.y} r={3} fill={trendColor}>
+              <title>{`${p.point.date}: ${formatCurrency(p.point.projectedNet, currency)}`}</title>
+            </circle>
+          ))}
+      </svg>
+      <div className="flex items-center justify-between text-xs text-slate-400 dark:text-slate-500 mt-1">
+        <span>Today</span>
+        <span className="font-medium" style={{ color: trendColor }}>
+          {formatCurrency(last.point.projectedNet, currency)} in 30 days
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function KpiCard({ label, value, hint, hintClass }: { label: string; value: string; hint?: string; hintClass?: string }) {
   return (
     <div className={cardClasses}>
@@ -250,6 +308,10 @@ export default function AnalyticsPage() {
 
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
+  // Independent of the from/to range picker above — it's always "trailing
+  // 60 days from today, projected 30 days forward," not a range query.
+  const [cashFlowProjection, setCashFlowProjection] = useState<CashFlowProjection[]>([]);
+
   useEffect(() => {
     if (!getAuthToken()) {
       router.replace('/login');
@@ -257,6 +319,11 @@ export default function AnalyticsPage() {
     }
     setCheckedAuth(true);
   }, [router]);
+
+  useEffect(() => {
+    if (!checkedAuth) return;
+    analyticsApi.cashFlowProjection().then(setCashFlowProjection).catch(() => {});
+  }, [checkedAuth]);
 
   const load = useCallback(async (rangeFrom: string, rangeTo: string, gran: Granularity, mode: ViewMode) => {
     setLoading(true);
@@ -465,6 +532,14 @@ export default function AnalyticsPage() {
                   </Link>
                 </div>
               )}
+
+              <div className={`${cardClasses} mb-6`}>
+                <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-1">30-Day Cash Flow Projection</h2>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mb-4">
+                  A straight-line projection from your trailing 60-day average net cash flow — a guide, not a guarantee.
+                </p>
+                <CashFlowProjectionChart data={cashFlowProjection} currency={currency} />
+              </div>
 
               {/* Combined vs. split toggle */}
               <div className="flex items-center gap-2 mb-4">

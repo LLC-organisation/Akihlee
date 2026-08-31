@@ -201,6 +201,7 @@ export type LineItem = {
   totalPrice: number;
   categoryTag?: string | null;
   isTaxable?: boolean | null;
+  categoryConfidence?: number | null;
 };
 
 export type ExtractedData = {
@@ -232,6 +233,10 @@ export type BankTransaction = {
   amount: number;
   type: 'INCOME' | 'EXPENSE' | 'TRANSFER';
   category: string | null;
+  // Set to 1.0 whenever a person creates/edits the row; otherwise whatever
+  // the extraction engine reported (or null for TRANSFER rows, which are
+  // never categorized at all, or rows predating this field).
+  categoryConfidence: number | null;
   createdAt: string;
 };
 
@@ -319,6 +324,40 @@ export const bankTransactionsApi = {
 
   remove: async (id: string): Promise<void> => {
     await apiClient.delete(`/bank-transactions/${id}`);
+  },
+};
+
+// A tenant's "always categorize X as Y" memory — applied server-side at
+// extraction-ingestion time (core-api's ExtractedDataController), not
+// something the frontend ever needs to apply itself.
+export type VendorRule = {
+  id: string;
+  tenantId: string;
+  vendorPattern: string;
+  type: 'INCOME' | 'EXPENSE' | 'TRANSFER';
+  category: string;
+  createdAt: string;
+};
+
+export type VendorRuleRequest = {
+  vendorPattern: string;
+  type: 'INCOME' | 'EXPENSE' | 'TRANSFER';
+  category: string;
+};
+
+export const vendorRulesApi = {
+  list: async (): Promise<VendorRule[]> => {
+    const response = await apiClient.get<VendorRule[]>('/vendor-rules');
+    return response.data;
+  },
+
+  create: async (request: VendorRuleRequest): Promise<VendorRule> => {
+    const response = await apiClient.post<VendorRule>('/vendor-rules', request);
+    return response.data;
+  },
+
+  remove: async (id: string): Promise<void> => {
+    await apiClient.delete(`/vendor-rules/${id}`);
   },
 };
 
@@ -618,6 +657,21 @@ export type CategoryDrilldown = {
   bankTransactions: BankTransaction[];
 };
 
+export type AnomalyAlert = {
+  category: string;
+  currentAmount: number;
+  historicalWeeklyAverage: number;
+  percentAboveAverage: number;
+  message: string;
+};
+
+// projectedNet is cumulative from today through this date, not an absolute
+// bank balance — see AnalyticsService.projectedCashFlow for why.
+export type CashFlowProjection = {
+  date: string;
+  projectedNet: number;
+};
+
 export const analyticsApi = {
   overview: async (range: AnalyticsDateRange): Promise<FinancialOverview> => {
     const response = await apiClient.get<FinancialOverview>('/analytics/overview', { params: range });
@@ -658,6 +712,18 @@ export const analyticsApi = {
     const response = await apiClient.get<CategoryDrilldown>('/analytics/category-transactions', {
       params: { ...range, category },
     });
+    return response.data;
+  },
+
+  /** Vendor/category spending spikes on one bank statement vs. the tenant's own trailing weekly average. */
+  anomalies: async (extractedDataId: string): Promise<AnomalyAlert[]> => {
+    const response = await apiClient.get<AnomalyAlert[]>(`/analytics/anomalies/${extractedDataId}`);
+    return response.data;
+  },
+
+  /** 30-day linear projection of cumulative net cash flow, extrapolated from the trailing 60 days. */
+  cashFlowProjection: async (): Promise<CashFlowProjection[]> => {
+    const response = await apiClient.get<CashFlowProjection[]>('/analytics/cash-flow-projection');
     return response.data;
   },
 };

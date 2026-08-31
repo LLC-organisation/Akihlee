@@ -128,6 +128,36 @@ class TestCleanAmount:
         assert OCRService._clean_amount("not an amount") is None
 
 
+class TestVendorCategory:
+    def test_recognizes_income_vendor(self):
+        assert OCRService._vendor_category("Toast POS Daily Batch", is_expense=False) == "Payment Processor Payout"
+        assert OCRService._vendor_category("DoorDash Weekly Payout", is_expense=False) == "Delivery Platform Revenue"
+
+    def test_recognizes_expense_vendor(self):
+        assert OCRService._vendor_category("ACH Debit - Sysco Foods", is_expense=True) == "Inventory & Raw Materials"
+        assert OCRService._vendor_category("Gusto Payroll", is_expense=True) == "Payroll & Personnel"
+
+    def test_vendor_match_ignored_when_direction_disagrees(self):
+        # A vendor name that's normally income shouldn't be applied to a row
+        # already determined to be an expense (or vice versa) — the row's
+        # own sign/keyword signal wins.
+        assert OCRService._vendor_category("Toast POS Daily Batch", is_expense=True) is None
+        assert OCRService._vendor_category("Gusto Payroll", is_expense=False) is None
+
+    def test_no_match_returns_none(self):
+        assert OCRService._vendor_category("Some Random Vendor", is_expense=True) is None
+
+    def test_multi_column_row_gets_vendor_category(self):
+        lines = ["08/01 Deposit - Toast POS Daily Batch $3,215.60 $23,950.00"]
+        transactions = OCRService._extract_bank_transactions_multi_column(lines, statement_year=2026)
+        assert transactions[0]["category"] == "Payment Processor Payout"
+
+    def test_single_column_row_gets_vendor_category(self):
+        lines = ["12/03/2026 ACH Debit Gusto Payroll -500.00"]
+        transactions = OCRService._extract_bank_transactions(lines)
+        assert transactions[0]["category"] == "Payroll & Personnel"
+
+
 class TestExtractBankName:
     def test_skips_disclaimer_line_and_finds_bank_name(self):
         lines = ["[SAMPLE / TEST DOCUMENT]", "Chase Bank, N.A.", "Account Summary"]

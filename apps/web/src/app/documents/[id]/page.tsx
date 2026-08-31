@@ -7,19 +7,33 @@ import {
   documentsApi,
   extractedDataApi,
   bankTransactionsApi,
+  vendorRulesApi,
+  analyticsApi,
   getAuthToken,
   Document,
   ExtractedData,
   UpdateExtractedDataRequest,
   LineItem,
   BankTransaction,
+  AnomalyAlert,
 } from '@/lib/api-client';
 import { AppSidebar } from '@/components/AppSidebar';
 import { StatusBadge } from '@/components/StatusBadge';
 import { SourceBadge } from '@/components/SourceBadge';
 import { DocumentTypeBadge } from '@/components/DocumentTypeBadge';
 import { ExtractionMethodBadge } from '@/components/ExtractionMethodBadge';
-import { SPENDING_CATEGORIES } from '@/lib/utils/categories';
+import { SPENDING_CATEGORIES, INCOME_CATEGORIES } from '@/lib/utils/categories';
+
+// A transaction's Type is the authoritative signal for which taxonomy
+// applies — an INCOME row was never going to fit any SPENDING_CATEGORIES
+// option, which is exactly why every income row was defaulting to
+// "Uncategorized". TRANSFER (money moving between the business's own
+// accounts) isn't real income or spend, so it isn't categorized at all.
+function categoryOptionsFor(type: BankTransaction['type']): readonly string[] {
+  if (type === 'INCOME') return INCOME_CATEGORIES;
+  if (type === 'TRANSFER') return ['Uncategorized'];
+  return SPENDING_CATEGORIES;
+}
 
 const cardClasses =
   'bg-white dark:bg-surface border border-slate-200 dark:border-white/10 rounded-2xl shadow-sm dark:shadow-none transition-all duration-200';
@@ -37,6 +51,18 @@ function formatBytes(bytes: number): string {
 function formatAmount(amount: number | null, currency: string | null): string {
   if (amount === null) return '—';
   return `${currency ?? ''} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`.trim();
+}
+
+// A bank transaction's stored amount isn't reliably signed by the time it
+// reaches here — the inline amount editor accepts whatever a person types,
+// with no sign enforcement — so the displayed sign is derived from `type`
+// (the authoritative direction signal, same reasoning AnalyticsService.java
+// uses server-side) rather than trusted off the raw number.
+function formatSignedAmount(amount: number, type: BankTransaction['type'], currency: string | null): string {
+  const magnitude = formatAmount(Math.abs(amount), currency);
+  if (type === 'INCOME') return `+${magnitude}`;
+  if (type === 'EXPENSE') return `-${magnitude}`;
+  return magnitude;
 }
 
 function formatDate(date: string | null): string {
@@ -96,6 +122,37 @@ const TYPE_BADGE_STYLES: Record<BankTransaction['type'], string> = {
   TRANSFER: 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300',
 };
 
+// Deliberately a higher bar than the extraction pipeline's own
+// categorization threshold (0.65, in vision_extraction_service.py) — a
+// category the model was only somewhat sure of is still worth a human
+// glance even though it wasn't forced to "Uncategorized" server-side.
+const HIGH_CONFIDENCE_THRESHOLD = 0.85;
+
+function ConfidenceIndicator({ txn }: { txn: BankTransaction }) {
+  if (txn.type === 'TRANSFER') return null; // never categorized — nothing to flag
+  const isHighConfidence =
+    txn.category !== 'Uncategorized' &&
+    txn.categoryConfidence !== null &&
+    txn.categoryConfidence !== undefined &&
+    txn.categoryConfidence >= HIGH_CONFIDENCE_THRESHOLD;
+  if (isHighConfidence) {
+    return (
+      <span title="High confidence" className="shrink-0 text-emerald-600 dark:text-emerald-400" aria-label="High confidence">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+        </svg>
+      </span>
+    );
+  }
+  return (
+    <span
+      title="Low confidence — worth a check"
+      className="shrink-0 w-2.5 h-2.5 rounded-full bg-amber-400 dark:bg-amber-500"
+      aria-label="Low confidence, needs review"
+    />
+  );
+}
+
 type BankTransactionsSectionProps = {
   extractedDataId: string;
   currency: string | null;
@@ -127,6 +184,29 @@ function BankTransactionsSection({
   setSaving,
   editInputClasses,
 }: BankTransactionsSectionProps) {
+  // Prompt shown after a manual category correction, offering to remember
+  // it as a vendor rule (applied server-side to every future statement —
+  // see VendorRule/ExtractedDataController.receiveExtraction). Local-only
+  // state: dismissing it or navigating away just drops the offer, nothing
+  // to persist either way.
+  const [vendorRulePrompt, setVendorRulePrompt] = useState<{ vendor: string; type: BankTransaction['type']; category: string } | null>(null);
+  const [savingRule, setSavingRule] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [anomalies, setAnomalies] = useState<AnomalyAlert[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    analyticsApi
+      .anomalies(extractedDataId)
+      .then((result) => {
+        if (!cancelled) setAnomalies(result);
+      })
+      .catch(() => {}); // best-effort insight — a failed fetch just means no alert shown
+    return () => {
+      cancelled = true;
+    };
+  }, [extractedDataId]);
   const fieldValue = (txn: BankTransaction, field: TxnField): string => {
     switch (field) {
       case 'date':
@@ -168,6 +248,34 @@ function BankTransactionsSection({
       setError('Could not save transaction. Try again.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleCategoryChange = (txn: BankTransaction, category: string) => {
+    saveTransaction(txn, { category });
+    const vendor = (txn.payeeOrPayer || txn.description || '').trim();
+    // Nothing to remember for an "I don't know" choice or a row that isn't
+    // really income/expense in the first place.
+    if (vendor && category !== 'Uncategorized' && txn.type !== 'TRANSFER') {
+      setVendorRulePrompt({ vendor, type: txn.type, category });
+    }
+  };
+
+  const saveVendorRule = async () => {
+    if (!vendorRulePrompt) return;
+    setSavingRule(true);
+    try {
+      await vendorRulesApi.create({
+        vendorPattern: vendorRulePrompt.vendor,
+        type: vendorRulePrompt.type,
+        category: vendorRulePrompt.category,
+      });
+    } catch {
+      // Best-effort — the row's own edit already succeeded independently
+      // of this, so a failed rule save isn't worth surfacing as an error.
+    } finally {
+      setSavingRule(false);
+      setVendorRulePrompt(null);
     }
   };
 
@@ -231,12 +339,87 @@ function BankTransactionsSection({
     }
   };
 
-  const netTotal = transactions.reduce(
-    (sum, t) => sum + (t.type === 'EXPENSE' ? -t.amount : t.amount),
-    0
-  );
+  // Grouped by type (the authoritative direction signal) rather than by
+  // the raw stored sign — same reasoning as formatSignedAmount above.
+  const totalIncome = transactions
+    .filter((t) => t.type === 'INCOME')
+    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  const totalExpenses = transactions
+    .filter((t) => t.type === 'EXPENSE')
+    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  const netTotal = totalIncome - totalExpenses;
+  const netMargin = totalIncome > 0 ? ((totalIncome - totalExpenses) / totalIncome) * 100 : null;
 
-  const editableCell = (txn: BankTransaction, field: TxnField, display: string, align: 'left' | 'right' = 'left') =>
+  // Flags every row sharing the same date + payee/description + amount as
+  // another row — recomputed on every render, so it stays live as rows are
+  // edited/added/removed. Rows that legitimately repeat (payroll on the
+  // same amount twice in one statement, say) are keyed the same way real
+  // OCR/paste duplicates are, so this is a "check me" signal, not proof.
+  const duplicateIds = (() => {
+    const keyOf = (t: BankTransaction) =>
+      `${t.transactionDate}|${(t.payeeOrPayer ?? t.description ?? '').trim().toLowerCase()}|${t.amount}`;
+    const counts = new Map<string, number>();
+    for (const t of transactions) counts.set(keyOf(t), (counts.get(keyOf(t)) ?? 0) + 1);
+    return new Set(transactions.filter((t) => (counts.get(keyOf(t)) ?? 0) > 1).map((t) => t.id));
+  })();
+
+  // TRANSFER rows are never categorized (see ConfidenceIndicator), so
+  // they're excluded from both the verified/review split and bulk select.
+  const categorizable = transactions.filter((t) => t.type !== 'TRANSFER');
+  const verifiedCount = categorizable.filter(
+    (t) => t.categoryConfidence != null && t.categoryConfidence >= HIGH_CONFIDENCE_THRESHOLD
+  ).length;
+  const reviewCount = categorizable.length - verifiedCount;
+
+  const selectAllHighConfidence = () => {
+    setSelectedIds(new Set(
+      categorizable
+        .filter((t) => t.categoryConfidence != null && t.categoryConfidence >= HIGH_CONFIDENCE_THRESHOLD)
+        .map((t) => t.id)
+    ));
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectedTransactions = transactions.filter((t) => selectedIds.has(t.id));
+  // null (rather than an empty list) when the selection mixes INCOME and
+  // EXPENSE rows — those taxonomies don't overlap, so there's no single
+  // category list that would be valid for the whole selection.
+  const bulkCategoryOptions =
+    selectedTransactions.length > 0 && selectedTransactions.every((t) => t.type === selectedTransactions[0].type)
+      ? categoryOptionsFor(selectedTransactions[0].type)
+      : null;
+
+  const applyBulkCategory = async (category: string) => {
+    setBulkSaving(true);
+    setError(null);
+    try {
+      for (const txn of selectedTransactions) {
+        const updated = await bankTransactionsApi.update(txn.id, buildRequest(txn, { category }));
+        setTransactions((prev) => prev.map((t) => (t.id === txn.id ? updated : t)));
+      }
+      setSelectedIds(new Set());
+    } catch {
+      setError('Could not bulk-categorize. Some rows may not have updated.');
+    } finally {
+      setBulkSaving(false);
+    }
+  };
+
+  const editableCell = (
+    txn: BankTransaction,
+    field: TxnField,
+    display: string,
+    align: 'left' | 'right' = 'left',
+    valueClassName = ''
+  ) =>
     editing?.rowId === txn.id && editing.field === field ? (
       <input
         autoFocus
@@ -253,7 +436,7 @@ function BankTransactionsSection({
       <button
         type="button"
         onClick={() => startEdit(txn, field)}
-        className={`w-full ${align === 'right' ? 'text-right' : 'text-left'} hover:underline decoration-dashed underline-offset-2 decoration-slate-400`}
+        className={`w-full ${align === 'right' ? 'text-right' : 'text-left'} hover:underline decoration-dashed underline-offset-2 decoration-slate-400 ${valueClassName}`}
       >
         {display || '—'}
       </button>
@@ -263,15 +446,126 @@ function BankTransactionsSection({
     <div className="mt-6 pt-4 border-t border-slate-100 dark:border-white/5">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Bank Transactions</h3>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Net: <span className="font-medium text-slate-900 dark:text-white">{formatAmount(netTotal, currency)}</span>
-        </p>
       </div>
+
+      {anomalies.length > 0 && (
+        <div className="mb-3 px-3 py-2.5 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
+          <p className="text-xs font-semibold text-amber-800 dark:text-amber-400 mb-1">AI CFO Insight</p>
+          <ul className="space-y-0.5">
+            {anomalies.map((alert) => (
+              <li key={alert.category} className="text-sm text-amber-900 dark:text-amber-300">
+                {alert.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {transactions.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 mb-3 text-sm">
+          <span className="text-slate-500 dark:text-slate-400">
+            Income:{' '}
+            <span className="font-medium text-emerald-600 dark:text-emerald-400">
+              {formatAmount(totalIncome, currency)}
+            </span>
+          </span>
+          <span className="text-slate-500 dark:text-slate-400">
+            Expenses:{' '}
+            <span className="font-medium text-slate-900 dark:text-white">{formatAmount(totalExpenses, currency)}</span>
+          </span>
+          <span className="text-slate-500 dark:text-slate-400">
+            Net:{' '}
+            <span className={`font-medium ${netTotal >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'}`}>
+              {formatAmount(netTotal, currency)}
+            </span>
+          </span>
+          {netMargin !== null && (
+            <span className="text-slate-500 dark:text-slate-400">
+              Net margin: <span className="font-medium text-slate-900 dark:text-white">{netMargin.toFixed(1)}%</span>
+            </span>
+          )}
+        </div>
+      )}
 
       {error && <p className="text-sm text-red-600 dark:text-red-400 mb-2">{error}</p>}
 
+      {vendorRulePrompt && (
+        <div className="flex items-center justify-between gap-3 mb-3 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-500/10 text-sm">
+          <span className="text-slate-700 dark:text-slate-300">
+            Always categorize <span className="font-medium">&ldquo;{vendorRulePrompt.vendor}&rdquo;</span> as{' '}
+            <span className="font-medium">{vendorRulePrompt.category}</span>?
+          </span>
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              type="button"
+              onClick={saveVendorRule}
+              disabled={savingRule}
+              className="font-medium text-blue-700 dark:text-blue-400 hover:underline disabled:opacity-50"
+            >
+              {savingRule ? 'Saving…' : 'Save Rule'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setVendorRulePrompt(null)}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              aria-label="Dismiss"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       {transactions.length === 0 && (
         <p className="text-sm text-slate-400 dark:text-slate-500 mb-2">No transactions captured.</p>
+      )}
+
+      {categorizable.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 mb-2 text-sm">
+          <button
+            type="button"
+            onClick={selectAllHighConfidence}
+            className="font-medium text-blue-700 dark:text-blue-400 hover:underline"
+          >
+            Select All High Confidence
+          </button>
+          {selectedIds.size > 0 && (
+            <>
+              <span className="text-slate-500 dark:text-slate-400">{selectedIds.size} selected</span>
+              {bulkCategoryOptions ? (
+                <select
+                  value=""
+                  onChange={(e) => e.target.value && applyBulkCategory(e.target.value)}
+                  disabled={bulkSaving}
+                  className={`${editInputClasses} w-auto`}
+                >
+                  <option value="" disabled>
+                    {bulkSaving ? 'Applying…' : 'Bulk categorize as…'}
+                  </option>
+                  {bulkCategoryOptions.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="text-xs text-slate-400">Select rows of one type (Income or Expense) to bulk categorize</span>
+              )}
+              <button
+                type="button"
+                onClick={() => setSelectedIds(new Set())}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                Clear
+              </button>
+            </>
+          )}
+          <span className="ml-auto inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300">
+            {verifiedCount} Verified · {reviewCount} Needs Review
+          </span>
+        </div>
       )}
 
       {transactions.length > 0 && (
@@ -279,6 +573,7 @@ function BankTransactionsSection({
           <table className="min-w-full text-sm">
             <thead>
               <tr className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                <th className="px-2 py-1.5" />
                 <th className="px-2 py-1.5 text-left">Date</th>
                 <th className="px-2 py-1.5 text-left">Description / Payee</th>
                 <th className="px-2 py-1.5 text-left">Type</th>
@@ -290,15 +585,43 @@ function BankTransactionsSection({
             <tbody>
               {transactions.map((txn) => (
                 <tr key={txn.id} className="border-t border-slate-100 dark:border-white/5">
+                  <td className="p-1 w-8">
+                    {txn.type !== 'TRANSFER' && (
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(txn.id)}
+                        onChange={() => toggleSelect(txn.id)}
+                        aria-label={`Select transaction on ${txn.transactionDate}`}
+                      />
+                    )}
+                  </td>
                   <td className="p-1 w-32">{editableCell(txn, 'date', formatDate(txn.transactionDate))}</td>
                   <td className="p-1">
-                    <div>{editableCell(txn, 'description', txn.description ?? '')}</div>
+                    <div className="flex items-center gap-1.5">
+                      {editableCell(txn, 'description', txn.description ?? '')}
+                      {duplicateIds.has(txn.id) && (
+                        <span
+                          title="Another row has the same date, payee, and amount — check for a duplicate."
+                          className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400"
+                        >
+                          Duplicate
+                        </span>
+                      )}
+                    </div>
                     <div className="text-xs text-slate-400">{editableCell(txn, 'payee', txn.payeeOrPayer ?? '')}</div>
                   </td>
                   <td className="p-1 w-32">
                     <select
                       value={txn.type}
-                      onChange={(e) => saveTransaction(txn, { type: e.target.value as BankTransaction['type'] })}
+                      onChange={(e) => {
+                        const nextType = e.target.value as BankTransaction['type'];
+                        // The old category almost certainly doesn't belong
+                        // to the new type's taxonomy (e.g. "Meals &
+                        // Entertainment" isn't a valid option once a row is
+                        // switched to INCOME) — reset it rather than leave a
+                        // stale, now-invalid value in place.
+                        saveTransaction(txn, { type: nextType, category: 'Uncategorized' });
+                      }}
                       disabled={saving}
                       className={`text-xs font-medium rounded-full px-2 py-1 border-0 ${TYPE_BADGE_STYLES[txn.type]}`}
                     >
@@ -308,21 +631,34 @@ function BankTransactionsSection({
                     </select>
                   </td>
                   <td className="p-1 w-40">
-                    <select
-                      value={txn.category ?? 'Uncategorized'}
-                      onChange={(e) => saveTransaction(txn, { category: e.target.value })}
-                      disabled={saving}
-                      className={editInputClasses}
-                    >
-                      {SPENDING_CATEGORIES.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="flex items-center gap-1.5">
+                      <select
+                        value={txn.category ?? 'Uncategorized'}
+                        onChange={(e) => handleCategoryChange(txn, e.target.value)}
+                        disabled={saving || txn.type === 'TRANSFER'}
+                        className={`${editInputClasses} flex-1`}
+                      >
+                        {categoryOptionsFor(txn.type).map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                      <ConfidenceIndicator txn={txn} />
+                    </div>
                   </td>
                   <td className="p-1 w-28 text-right">
-                    {editableCell(txn, 'amount', formatAmount(txn.amount, currency), 'right')}
+                    {editableCell(
+                      txn,
+                      'amount',
+                      formatSignedAmount(txn.amount, txn.type, currency),
+                      'right',
+                      txn.type === 'INCOME'
+                        ? 'text-emerald-600 dark:text-emerald-400 font-medium'
+                        : txn.type === 'EXPENSE'
+                          ? 'text-slate-900 dark:text-white font-semibold'
+                          : ''
+                    )}
                   </td>
                   <td className="p-1">
                     <button
@@ -626,7 +962,7 @@ export default function DocumentDetailPage({ params }: { params: { id: string } 
       <div className="bg-glow" />
       <AppSidebar />
       <div className="relative z-10 lg:pl-20">
-        <main className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
           <button
             type="button"
             onClick={() => router.push('/documents')}
@@ -658,7 +994,7 @@ export default function DocumentDetailPage({ params }: { params: { id: string } 
           {!loading && !notFound && !error && doc && (
             <div className="space-y-6">
               <div className={`${cardClasses} p-6`}>
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                   <div className="min-w-0">
                     <h1 className="text-xl font-bold text-slate-900 dark:text-white truncate">{doc.filename}</h1>
                     <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
@@ -672,33 +1008,51 @@ export default function DocumentDetailPage({ params }: { params: { id: string } 
                     {data && <ExtractionMethodBadge extractionMethod={data.extractionMethod} />}
                   </div>
                 </div>
-
-                {doc.source === 'SQUARE' ? (
-                  <p className="text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-canvas rounded-lg px-3 py-2.5">
-                    Synced from Square — there&apos;s no receipt file for this transaction.
-                  </p>
-                ) : contentUrl ? (
-                  doc.contentType.startsWith('image/') ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={contentUrl}
-                      alt={doc.filename}
-                      className="max-w-full max-h-[480px] rounded-lg border border-slate-200 dark:border-white/10 mx-auto"
-                    />
-                  ) : (
-                    <a
-                      href={contentUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-400 hover:underline"
-                    >
-                      Open original ({doc.contentType})
-                    </a>
-                  )
-                ) : (
-                  <p className="text-sm text-slate-400 dark:text-slate-500">Loading original file…</p>
-                )}
               </div>
+
+              {/* Split workspace: document preview on the left (sticky so it
+                  stays in view while the data on the right scrolls), review
+                  data on the right. Below lg, these stack instead — a fixed
+                  side-by-side split doesn't leave room for either panel on a
+                  narrow screen. */}
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
+                <div className="lg:col-span-2 lg:sticky lg:top-8">
+                  <div className={`${cardClasses} p-4`}>
+                    {doc.source === 'SQUARE' ? (
+                      <p className="text-sm text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-canvas rounded-lg px-3 py-2.5">
+                        Synced from Square — there&apos;s no receipt file for this transaction.
+                      </p>
+                    ) : contentUrl ? (
+                      doc.contentType.startsWith('image/') ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={contentUrl}
+                          alt={doc.filename}
+                          className="max-w-full max-h-[80vh] rounded-lg border border-slate-200 dark:border-white/10 mx-auto"
+                        />
+                      ) : doc.contentType === 'application/pdf' ? (
+                        <iframe
+                          src={contentUrl}
+                          title={doc.filename}
+                          className="w-full h-[80vh] rounded-lg border border-slate-200 dark:border-white/10"
+                        />
+                      ) : (
+                        <a
+                          href={contentUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 text-sm font-medium text-blue-700 dark:text-blue-400 hover:underline"
+                        >
+                          Open original ({doc.contentType})
+                        </a>
+                      )
+                    ) : (
+                      <p className="text-sm text-slate-400 dark:text-slate-500">Loading original file…</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="lg:col-span-3 space-y-6">
 
               {notExtractedYet && (
                 <div className={`${cardClasses} p-6 text-center`}>
@@ -715,7 +1069,7 @@ export default function DocumentDetailPage({ params }: { params: { id: string } 
                 <div className={`${cardClasses} p-6`}>
                   <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-1">Extracted Data</h2>
                   <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
-                    Verify each field against the receipt above, then approve or reject.
+                    Verify each field against the document preview on the left, then approve or reject.
                   </p>
 
                   {saveError && (
@@ -1066,6 +1420,8 @@ export default function DocumentDetailPage({ params }: { params: { id: string } 
                   )}
                 </div>
               )}
+                </div>
+              </div>
             </div>
           )}
         </main>

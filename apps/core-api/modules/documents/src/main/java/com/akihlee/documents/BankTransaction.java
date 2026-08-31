@@ -46,6 +46,15 @@ public class BankTransaction {
 
     private String category;
 
+    // How confident the extraction engine was in `category` (0-1), or null
+    // for rows predating this field. A human editing the row (create/update
+    // through BankTransactionController) always sets this to 1.0 — once a
+    // person has touched a row, it's verified regardless of what the AI
+    // originally guessed. See ExtractionMethodBadge-style green/amber UI
+    // treatment on the frontend for how this gets surfaced.
+    @Column(name = "category_confidence")
+    private Double categoryConfidence;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -55,7 +64,7 @@ public class BankTransaction {
 
     public BankTransaction(UUID extractedDataId, UUID tenantId, LocalDate transactionDate,
                             String description, String payeeOrPayer, BigDecimal amount,
-                            Type type, String category) {
+                            Type type, String category, Double categoryConfidence) {
         this.extractedDataId = extractedDataId;
         this.tenantId = tenantId;
         this.transactionDate = transactionDate;
@@ -64,6 +73,7 @@ public class BankTransaction {
         this.amount = amount;
         this.type = type;
         this.category = category;
+        this.categoryConfidence = categoryConfidence;
         this.createdAt = Instant.now();
     }
 
@@ -125,6 +135,14 @@ public class BankTransaction {
 
     public void setCategory(String category) {
         this.category = category;
+    }
+
+    public Double getCategoryConfidence() {
+        return categoryConfidence;
+    }
+
+    public void setCategoryConfidence(Double categoryConfidence) {
+        this.categoryConfidence = categoryConfidence;
     }
 
     public Instant getCreatedAt() {

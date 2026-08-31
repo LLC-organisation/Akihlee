@@ -37,8 +37,11 @@ _JSON_FENCE_PATTERN = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
 _VALID_DOCUMENT_TYPES = {"RECEIPT", "INVOICE", "BANK_STATEMENT"}
 _VALID_CURRENCIES = {"USD", "KES"}  # MVP scope: US and Kenyan markets only
 
-# Fixed SME spending taxonomy — must match apps/web/src/lib/utils/categories.ts.
-# The model is never trusted to invent a category outside this list.
+# Fixed SME spending taxonomy — must match SPENDING_CATEGORIES in
+# apps/web/src/lib/utils/categories.ts. The model is never trusted to invent
+# a category outside this list. Only applies to line items (always spend)
+# and EXPENSE-type bank transactions — see _VALID_INCOME_CATEGORIES below
+# for INCOME-type rows, which this taxonomy was never a fit for.
 _VALID_CATEGORIES = {
     "Meals & Entertainment",
     "Office Supplies & Equipment",
@@ -48,6 +51,23 @@ _VALID_CATEGORIES = {
     "Inventory & Raw Materials",
     "Marketing & Advertising",
     "Professional Services",
+    "Payroll & Personnel",
+    "Uncategorized",
+}
+# Fixed income taxonomy for INCOME-type bank transactions — must match
+# INCOME_CATEGORIES in apps/web/src/lib/utils/categories.ts. Deliberately
+# separate from _VALID_CATEGORIES above: every deposit was defaulting to
+# "Uncategorized" there since nothing in an expense-shaped list ever fit.
+_VALID_INCOME_CATEGORIES = {
+    "Sales Revenue",
+    "Payment Processor Payout",
+    "Delivery Platform Revenue",
+    "Client Invoices & Services",
+    "Loans & Financing",
+    "Owner Contribution",
+    "Interest Income",
+    "Refunds & Reimbursements",
+    "Other Income",
     "Uncategorized",
 }
 # Below this, a category the model proposed is discarded in favor of
@@ -103,8 +123,9 @@ visible separate from the description),
       "totalPrice": number,
       "categoryTag": one of "Meals & Entertainment", "Office Supplies & Equipment", \
 "Software & IT Services", "Utilities & Rent", "Travel & Transportation", "Inventory & Raw Materials", \
-"Marketing & Advertising", "Professional Services", "Uncategorized" — pick the single best-fitting \
-category strictly from this list; never invent one outside it, and use "Uncategorized" if genuinely unsure,
+"Marketing & Advertising", "Professional Services", "Payroll & Personnel", "Uncategorized" — pick the \
+single best-fitting category strictly from this list; never invent one outside it, and use \
+"Uncategorized" if genuinely unsure,
       "categoryConfidence": number between 0 and 1 (your confidence in categoryTag above),
       "isTaxable": boolean or null
     },
@@ -126,9 +147,21 @@ Withdrawal columns) — you supply the sign based on which column/type the row b
       "balance": number or null — the running account balance printed on this row, if the \
 statement shows one (most do, as a third column after the transaction amount); null if this \
 statement doesn't print a running balance,
-      "category": one of "Meals & Entertainment", "Office Supplies & Equipment", "Software & IT Services", \
-"Utilities & Rent", "Travel & Transportation", "Inventory & Raw Materials", "Marketing & Advertising", \
-"Professional Services", "Uncategorized" — same rule as categoryTag above,
+      "category": the taxonomy depends on type above — an expense-shaped category never fits a \
+deposit, so use the matching list:
+        - type "EXPENSE": one of "Meals & Entertainment", "Office Supplies & Equipment", \
+"Software & IT Services", "Utilities & Rent", "Travel & Transportation", "Inventory & Raw Materials", \
+"Marketing & Advertising", "Professional Services", "Payroll & Personnel", "Uncategorized",
+        - type "INCOME": one of "Sales Revenue" (regular product/service sales not otherwise covered \
+below), "Payment Processor Payout" (a Square/Stripe/PayPal/etc. payout landing in the account), \
+"Delivery Platform Revenue" (a DoorDash/UberEats/Grubhub/Postmates-style marketplace payout), \
+"Client Invoices & Services" (a B2B client paying an invoice — consulting, catering, contract work), \
+"Loans & Financing", "Owner Contribution", "Interest Income", "Refunds & Reimbursements", \
+"Other Income", "Uncategorized",
+        - type "TRANSFER": always "Uncategorized" — a transfer between the business's own accounts \
+is neither income nor spend, so don't attempt to categorize it,
+      pick the single best-fitting category strictly from the list matching this row's type; never \
+invent one outside it, and use "Uncategorized" if genuinely unsure,
       "categoryConfidence": number between 0 and 1 (your confidence in category above)
     },
   "raw_text": string — a best-effort plain-text transcription of everything visible on the \
@@ -138,6 +171,19 @@ full transcription just burns output tokens without adding information, and risk
 transaction list on a long statement,
   "confidence": number between 0 and 1 (your own confidence that the above is accurate and complete)
 }
+
+Known vendor/payee name patterns — treat these as strong priors for categoryTag/category (and for a \
+bank transaction's type) whenever the payee or description clearly matches one, since a recognized \
+vendor name is more reliable than judging from amount/context alone. Still use your own judgment if \
+the actual page content clearly contradicts one (e.g. a refund from a normally-expense vendor):
+- "Toast", "Square", "Clover" (a POS payout landing in the account) -> type INCOME, category \
+"Payment Processor Payout"
+- "DoorDash", "UberEats", "Uber Eats", "Grubhub", "Postmates" -> type INCOME, category \
+"Delivery Platform Revenue"
+- "Sysco", "US Foods", "Restaurant Depot" -> type EXPENSE, category "Inventory & Raw Materials"
+- "Gusto", "ADP", "Paychex" -> type EXPENSE, category "Payroll & Personnel"
+- A utility or realty company (electric, gas, water, internet, rent) -> type EXPENSE, category \
+"Utilities & Rent"
 
 Rules:
 - If a field cannot be determined, use null (or an empty array for list fields) rather than guessing.
@@ -228,16 +274,29 @@ class VisionExtractionService:
         return _parse_result(raw_content)
 
 
-def _resolve_category(raw_category: Any, raw_confidence: Any) -> str:
+def _resolve_category(raw_category: Any, raw_confidence: Any, valid_categories: set[str] = _VALID_CATEGORIES) -> str:
     """Never trust the model's own confidence-threshold judgment — enforce
     it here even though the prompt also asks for it, same reasoning as the
     currency/document_type clamping below (a model won't always follow
-    instructions exactly).
+    instructions exactly). valid_categories defaults to the spending
+    taxonomy (line items, EXPENSE bank transactions); callers pass
+    _VALID_INCOME_CATEGORIES for INCOME-type bank transactions instead.
     """
     confidence = raw_confidence if isinstance(raw_confidence, (int, float)) else 0.0
     if confidence < _CATEGORY_CONFIDENCE_THRESHOLD:
         return "Uncategorized"
-    return raw_category if raw_category in _VALID_CATEGORIES else "Uncategorized"
+    return raw_category if raw_category in valid_categories else "Uncategorized"
+
+
+def _normalize_confidence(raw_confidence: Any) -> float | None:
+    """Clamps to a real [0, 1] float, or None for anything else — this is
+    what actually gets persisted (see BankTransaction.categoryConfidence/
+    LineItem.categoryConfidence), so a model emitting a string or an
+    out-of-range number shouldn't silently corrupt a confidence-badge UI.
+    """
+    if isinstance(raw_confidence, (int, float)) and 0 <= raw_confidence <= 1:
+        return float(raw_confidence)
+    return None
 
 
 def _sanitize_line_items(line_items: list[Any]) -> list[dict[str, Any]]:
@@ -246,7 +305,13 @@ def _sanitize_line_items(line_items: list[Any]) -> list[dict[str, Any]]:
         if not isinstance(item, dict):
             continue
         item = dict(item)
-        item["categoryTag"] = _resolve_category(item.get("categoryTag"), item.pop("categoryConfidence", None))
+        raw_confidence = item.get("categoryConfidence")
+        item["categoryTag"] = _resolve_category(item.get("categoryTag"), raw_confidence)
+        # Kept (not discarded) even when categoryTag got clamped to
+        # "Uncategorized" above — a low-but-present confidence value is
+        # exactly what should drive an amber "needs review" badge, not a
+        # value indistinguishable from "never scored."
+        item["categoryConfidence"] = _normalize_confidence(raw_confidence)
         sanitized.append(item)
     return sanitized
 
@@ -257,7 +322,21 @@ def _sanitize_bank_transactions(transactions: list[Any]) -> list[dict[str, Any]]
         if not isinstance(txn, dict):
             continue
         txn = dict(txn)
-        txn["category"] = _resolve_category(txn.get("category"), txn.pop("categoryConfidence", None))
+        raw_confidence = txn.get("categoryConfidence")
+        # A transfer between the business's own accounts is neither income
+        # nor spend — never worth attempting to categorize, regardless of
+        # what the model proposed. categoryConfidence is None here (not 0)
+        # since no categorization was ever attempted, as opposed to one
+        # that was attempted and scored low.
+        if txn.get("type") == "TRANSFER":
+            txn["category"] = "Uncategorized"
+            txn["categoryConfidence"] = None
+        elif txn.get("type") == "INCOME":
+            txn["category"] = _resolve_category(txn.get("category"), raw_confidence, _VALID_INCOME_CATEGORIES)
+            txn["categoryConfidence"] = _normalize_confidence(raw_confidence)
+        else:
+            txn["category"] = _resolve_category(txn.get("category"), raw_confidence)
+            txn["categoryConfidence"] = _normalize_confidence(raw_confidence)
         sanitized.append(txn)
     return sanitized
 

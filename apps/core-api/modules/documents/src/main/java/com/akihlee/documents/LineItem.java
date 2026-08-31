@@ -21,6 +21,10 @@ public record LineItem(
         BigDecimal unitPrice,
         BigDecimal totalPrice,
         String categoryTag,
-        Boolean isTaxable
+        Boolean isTaxable,
+        // How confident the extraction engine was in categoryTag (0-1), or
+        // null. Threaded through for parity with BankTransaction's same
+        // field — see that class for the confidence-badge UI this feeds.
+        Double categoryConfidence
 ) {
 }
