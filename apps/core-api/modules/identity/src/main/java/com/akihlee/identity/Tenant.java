@@ -51,6 +51,22 @@ public class Tenant {
     @Column(name = "square_token_expires_at")
     private Instant squareTokenExpiresAt;
 
+    // Populated once this tenant completes QuickBooks' OAuth flow (see
+    // QuickBooksOAuthService) — null means "not connected." Unlike Square,
+    // there's no operator-fallback token: QuickBooks is OAuth-only, so every
+    // tenant must connect their own company.
+    @Column(name = "quickbooks_access_token", columnDefinition = "TEXT")
+    private String quickbooksAccessToken;
+
+    @Column(name = "quickbooks_refresh_token", columnDefinition = "TEXT")
+    private String quickbooksRefreshToken;
+
+    @Column(name = "quickbooks_realm_id")
+    private String quickbooksRealmId;
+
+    @Column(name = "quickbooks_token_expires_at")
+    private Instant quickbooksTokenExpiresAt;
+
     protected Tenant() {
         // JPA requires a no-arg constructor
     }
@@ -139,6 +155,42 @@ public class Tenant {
         this.squareRefreshToken = null;
         this.squareMerchantId = null;
         this.squareTokenExpiresAt = null;
+        this.updatedAt = Instant.now();
+    }
+
+    public boolean isQuickbooksConnected() {
+        return quickbooksAccessToken != null;
+    }
+
+    public String getQuickbooksAccessToken() {
+        return quickbooksAccessToken;
+    }
+
+    public String getQuickbooksRefreshToken() {
+        return quickbooksRefreshToken;
+    }
+
+    public String getQuickbooksRealmId() {
+        return quickbooksRealmId;
+    }
+
+    public Instant getQuickbooksTokenExpiresAt() {
+        return quickbooksTokenExpiresAt;
+    }
+
+    public void connectQuickbooks(String accessToken, String refreshToken, String realmId, Instant expiresAt) {
+        this.quickbooksAccessToken = accessToken;
+        this.quickbooksRefreshToken = refreshToken;
+        this.quickbooksRealmId = realmId;
+        this.quickbooksTokenExpiresAt = expiresAt;
+        this.updatedAt = Instant.now();
+    }
+
+    public void disconnectQuickbooks() {
+        this.quickbooksAccessToken = null;
+        this.quickbooksRefreshToken = null;
+        this.quickbooksRealmId = null;
+        this.quickbooksTokenExpiresAt = null;
         this.updatedAt = Instant.now();
     }
 }

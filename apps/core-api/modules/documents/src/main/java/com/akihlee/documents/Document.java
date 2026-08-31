@@ -140,6 +140,7 @@ public class Document {
         UPLOAD,
         EMAIL,
         WHATSAPP,
-        SQUARE
+        SQUARE,
+        QUICKBOOKS
     }
 }

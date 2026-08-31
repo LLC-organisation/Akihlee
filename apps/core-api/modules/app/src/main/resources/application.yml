@@ -115,7 +115,19 @@ square:
     # application (developer.squareup.com) or obtainToken will reject it.
     redirect-uri: ${SQUARE_OAUTH_REDIRECT_URI:http://localhost:8080/api/v1/integrations/square/oauth/callback}
 
-# Where to send the browser back to after the Square OAuth callback
-# finishes — the frontend origin, not this API's own.
+# No shared access-token fallback here, unlike square: above — QuickBooks
+# is OAuth-only, every tenant must connect their own company.
+quickbooks:
+  environment: ${QUICKBOOKS_ENVIRONMENT:sandbox}
+  oauth:
+    client-id: ${QUICKBOOKS_OAUTH_CLIENT_ID:}
+    client-secret: ${QUICKBOOKS_OAUTH_CLIENT_SECRET:}
+    # Must exactly match a Redirect URI registered on the app (Sandbox or
+    # Production, matching QUICKBOOKS_ENVIRONMENT) at developer.intuit.com,
+    # or the token exchange will reject it.
+    redirect-uri: ${QUICKBOOKS_OAUTH_REDIRECT_URI:http://localhost:8080/api/v1/integrations/quickbooks/oauth/callback}
+
+# Where to send the browser back to after the Square/QuickBooks OAuth
+# callback finishes — the frontend origin, not this API's own.
 app:
   web-url: ${APP_WEB_URL:http://localhost:3000}

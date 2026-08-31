@@ -68,6 +68,8 @@ public class SecurityConfig {
                         // signed `state` param (not a JWT) proves which tenant it
                         // belongs to; see SquareIntegrationController.oauthCallback.
                         .requestMatchers("/api/v1/integrations/square/oauth/callback").permitAll()
+                        // Same reasoning as Square's callback above, for QuickBooks.
+                        .requestMatchers("/api/v1/integrations/quickbooks/oauth/callback").permitAll()
                         // Audit log / admin tooling — gated on the "role" JWT claim
                         // (see JwtAuthenticationFilter), not just "any logged-in user".
                         .requestMatchers("/api/v1/admin/**").hasAuthority("ADMIN")

@@ -34,6 +34,7 @@ public class DocumentService {
 
     private final DocumentRepository documentRepository;
     private final ExtractedDataRepository extractedDataRepository;
+    private final BankTransactionRepository bankTransactionRepository;
     private final StorageService storageService;
     private final RabbitTemplate rabbitTemplate;
     private final ObjectMapper objectMapper;
@@ -43,6 +44,7 @@ public class DocumentService {
     public DocumentService(
             DocumentRepository documentRepository,
             ExtractedDataRepository extractedDataRepository,
+            BankTransactionRepository bankTransactionRepository,
             StorageService storageService,
             RabbitTemplate rabbitTemplate,
             ObjectMapper objectMapper,
@@ -50,6 +52,7 @@ public class DocumentService {
             UserRepository userRepository) {
         this.documentRepository = documentRepository;
         this.extractedDataRepository = extractedDataRepository;
+        this.bankTransactionRepository = bankTransactionRepository;
         this.storageService = storageService;
         this.rabbitTemplate = rabbitTemplate;
         this.objectMapper = objectMapper;
@@ -105,8 +108,15 @@ public class DocumentService {
 
     /**
      * Seeds a Document + ExtractedData pair directly from already-structured
-     * data (e.g. a Square payment), skipping storage and the OCR queue
-     * entirely — there's no real file behind it.
+     * data (e.g. a Square payment or QuickBooks purchase), skipping storage
+     * and the OCR queue entirely — there's no real file behind it.
+     *
+     * If the seed carries both a category and a type (a source that already
+     * knows both, e.g. QuickBooks — Square's Payments can't assert either),
+     * a BankTransaction row is created too, at full confidence (same
+     * convention as a human-confirmed edit), so this record participates in
+     * category breakdowns, anomaly detection, and vendor-rule matching the
+     * same way a bank-statement-sourced transaction does.
      */
     @Transactional
     public Document createFromExternalData(UUID tenantId, Document.DocumentSource source,
@@ -131,6 +141,13 @@ public class DocumentService {
         data.setLineItemsJson("[]");
         data.setConfidence(1.0);
         extractedDataRepository.save(data);
+
+        if (seed.category() != null && seed.type() != null) {
+            bankTransactionRepository.save(new BankTransaction(
+                    data.getId(), tenantId, seed.transactionDate(),
+                    seed.merchantName(), seed.merchantName(), seed.totalAmount(),
+                    seed.type(), seed.category(), 1.0));
+        }
 
         auditLogService.log(tenantId, currentUserId(), currentUserEmail(),
                 AuditAction.DOCUMENT_IMPORTED, "DOCUMENT", saved.getId().toString(), syntheticFilename);

@@ -70,6 +70,20 @@ function SquareLogo() {
   );
 }
 
+function QuickBooksLogo() {
+  return (
+    <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-500/10 text-teal-600 dark:text-teal-400 shrink-0">
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M12 6v12m-4-9.5c0 1.38 1.79 2.5 4 2.5s4 1.12 4 2.5-1.79 2.5-4 2.5-4-1.12-4-2.5"
+        />
+      </svg>
+    </span>
+  );
+}
+
 const inputClasses =
   'w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-canvas px-3 py-2.5 text-slate-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-400 transition-colors duration-200';
 const primaryButtonClasses =
@@ -305,18 +319,163 @@ function SquareSection({
   );
 }
 
-// useSearchParams() (read below, for the Square OAuth callback's
-// ?square=connected|error) opts the page into client-side rendering and
-// requires a Suspense boundary around anything that calls it, or `next
-// build` fails prerendering this route — see the default export below.
-function IntegrationsPageContent() {
+function QuickBooksSection({
+  tenant,
+  onUpdated,
+  oauthBanner,
+}: {
+  tenant: Tenant;
+  onUpdated: (t: Tenant) => void;
+  oauthBanner: { type: 'success' | 'error'; text: string } | null;
+}) {
+  const [syncing, setSyncing] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const handleConnect = async () => {
+    setMessage(null);
+    setConnecting(true);
+    try {
+      const url = await integrationsApi.getQuickBooksAuthorizeUrl();
+      // A real top-level navigation, not a fetch — Intuit's own consent
+      // screen isn't something an XHR can render.
+      window.location.href = url;
+    } catch (err) {
+      const notConfigured = isAxiosError(err) && err.response?.status === 400;
+      setMessage({
+        type: 'error',
+        text: notConfigured
+          ? (err.response?.data as { error?: string } | undefined)?.error ?? 'QuickBooks OAuth is not configured.'
+          : 'Could not start connecting to QuickBooks. Please try again.',
+      });
+      setConnecting(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    setMessage(null);
+    setDisconnecting(true);
+    try {
+      await integrationsApi.disconnectQuickBooks();
+      onUpdated({ ...tenant, quickbooksConnected: false });
+      setMessage({ type: 'success', text: 'QuickBooks disconnected.' });
+    } catch {
+      setMessage({ type: 'error', text: 'Could not disconnect. Please try again.' });
+    } finally {
+      setDisconnecting(false);
+    }
+  };
+
+  const handleSync = async () => {
+    setMessage(null);
+    setSyncing(true);
+    try {
+      const result = await integrationsApi.syncQuickBooks();
+      setMessage({
+        type: 'success',
+        text: result.imported === 0
+          ? 'Synced — no new transactions in the last 30 days.'
+          : `Synced ${result.imported} new transaction${result.imported === 1 ? '' : 's'} from QuickBooks. Check Documents to review them.`,
+      });
+    } catch (err) {
+      const notConfigured = isAxiosError(err) && err.response?.status === 400;
+      setMessage({
+        type: 'error',
+        text: notConfigured
+          ? (err.response?.data as { error?: string } | undefined)?.error ?? 'QuickBooks is not configured.'
+          : 'Could not sync with QuickBooks. Please try again.',
+      });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  return (
+    <SectionCard
+      title="QuickBooks"
+      icon={<QuickBooksLogo />}
+      description={
+        tenant.quickbooksConnected
+          ? 'Sync expenses from QuickBooks into Documents for review.'
+          : 'Connect your QuickBooks company so your expenses show up in Documents for review — no API keys needed.'
+      }
+    >
+      {oauthBanner && <div className={oauthBanner.type === 'success' ? successBanner : errorBanner}>{oauthBanner.text}</div>}
+      {message && <div className={message.type === 'success' ? successBanner : errorBanner}>{message.text}</div>}
+
+      {tenant.quickbooksConnected ? (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <p className="text-sm text-slate-500 dark:text-slate-400">Pulls the last 30 days of expenses each time.</p>
+          <div className="flex items-center gap-3">
+            <button onClick={handleSync} disabled={syncing} className={primaryButtonClasses}>
+              {syncing ? 'Syncing…' : 'Sync now'}
+            </button>
+            <button
+              onClick={handleDisconnect}
+              disabled={disconnecting}
+              className="px-4 py-2 text-sm font-medium rounded-lg border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors duration-200 disabled:opacity-50"
+            >
+              {disconnecting ? 'Disconnecting…' : 'Disconnect'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex justify-end">
+          <button onClick={handleConnect} disabled={connecting} className={primaryButtonClasses}>
+            {connecting ? 'Redirecting…' : 'Connect with QuickBooks'}
+          </button>
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+/**
+ * Surfaces the ?<paramName>=connected|error banner an OAuth callback
+ * redirect leaves on the URL (see SquareIntegrationController/
+ * QuickBooksIntegrationController's redirectToIntegrations), then strips
+ * the param so a refresh doesn't keep re-showing a stale banner.
+ */
+function useOAuthBanner(
+  paramName: string,
+  connectedText: string,
+  errorText: string
+): { type: 'success' | 'error'; text: string } | null {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [banner, setBanner] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    const value = searchParams.get(paramName);
+    if (!value) return;
+    setBanner(
+      value === 'connected' ? { type: 'success', text: connectedText } : { type: 'error', text: errorText }
+    );
+    router.replace('/integrations');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  return banner;
+}
+
+// useSearchParams() (read below, for the Square/QuickBooks OAuth
+// callbacks' ?square=connected|error / ?quickbooks=connected|error) opts
+// the page into client-side rendering and requires a Suspense boundary
+// around anything that calls it, or `next build` fails prerendering this
+// route — see the default export below.
+function IntegrationsPageContent() {
+  const router = useRouter();
   const [checkedAuth, setCheckedAuth] = useState(false);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [squareOAuthBanner, setSquareOAuthBanner] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const squareOAuthBanner = useOAuthBanner(
+    'square', 'Square connected.', 'Could not connect to Square. Please try again.'
+  );
+  const quickbooksOAuthBanner = useOAuthBanner(
+    'quickbooks', 'QuickBooks connected.', 'Could not connect to QuickBooks. Please try again.'
+  );
 
   useEffect(() => {
     if (!getAuthToken()) {
@@ -325,21 +484,6 @@ function IntegrationsPageContent() {
     }
     setCheckedAuth(true);
   }, [router]);
-
-  // Square redirects back here with ?square=connected|error after the
-  // OAuth callback — surface it once, then strip the param so a refresh
-  // doesn't keep re-showing a stale banner.
-  useEffect(() => {
-    const square = searchParams.get('square');
-    if (!square) return;
-    setSquareOAuthBanner(
-      square === 'connected'
-        ? { type: 'success', text: 'Square connected.' }
-        : { type: 'error', text: 'Could not connect to Square. Please try again.' }
-    );
-    router.replace('/integrations');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -381,6 +525,7 @@ function IntegrationsPageContent() {
               <EmailSection tenant={tenant} />
               <WhatsAppSection tenant={tenant} onUpdated={setTenant} />
               <SquareSection tenant={tenant} onUpdated={setTenant} oauthBanner={squareOAuthBanner} />
+              <QuickBooksSection tenant={tenant} onUpdated={setTenant} oauthBanner={quickbooksOAuthBanner} />
             </div>
           )}
         </main>

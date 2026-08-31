@@ -120,6 +120,7 @@ export type Tenant = {
   whatsappPhoneNumber: string | null;
   inboundEmailAddress: string;
   squareConnected: boolean;
+  quickbooksConnected: boolean;
 };
 
 export const tenantApi = {
@@ -586,6 +587,26 @@ export const integrationsApi = {
 
   disconnectSquare: async (): Promise<void> => {
     await apiClient.delete('/integrations/square/oauth');
+  },
+
+  syncQuickBooks: async (): Promise<{ imported: number }> => {
+    const response = await apiClient.post<{ imported: number }>('/integrations/quickbooks/sync');
+    return response.data;
+  },
+
+  /**
+   * Returns the URL to send the browser to for Intuit's consent screen.
+   * A separate call from the actual navigation (`window.location.href =
+   * url`) since this one needs to be an authenticated fetch carrying the
+   * JWT — a plain link click to a protected backend route couldn't.
+   */
+  getQuickBooksAuthorizeUrl: async (): Promise<string> => {
+    const response = await apiClient.post<{ url: string }>('/integrations/quickbooks/oauth/authorize-url');
+    return response.data.url;
+  },
+
+  disconnectQuickBooks: async (): Promise<void> => {
+    await apiClient.delete('/integrations/quickbooks/oauth');
   },
 };
 

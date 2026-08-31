@@ -28,6 +28,8 @@ public final class AuditAction {
     public static final String WHATSAPP_NUMBER_DISCONNECTED = "WHATSAPP_NUMBER_DISCONNECTED";
     public static final String SQUARE_CONNECTED = "SQUARE_CONNECTED";
     public static final String SQUARE_DISCONNECTED = "SQUARE_DISCONNECTED";
+    public static final String QUICKBOOKS_CONNECTED = "QUICKBOOKS_CONNECTED";
+    public static final String QUICKBOOKS_DISCONNECTED = "QUICKBOOKS_DISCONNECTED";
     public static final String ACCOUNT_SUSPENDED = "ACCOUNT_SUSPENDED";
     public static final String ACCOUNT_REACTIVATED = "ACCOUNT_REACTIVATED";
 }

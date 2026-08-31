@@ -7,7 +7,8 @@ public record TenantResponse(
         String businessName,
         String whatsappPhoneNumber,
         String inboundEmailAddress,
-        boolean squareConnected) {
+        boolean squareConnected,
+        boolean quickbooksConnected) {
 
     public static TenantResponse from(Tenant tenant, String inboundEmailDomain) {
         return new TenantResponse(
@@ -15,6 +16,7 @@ public record TenantResponse(
                 tenant.getBusinessName(),
                 tenant.getWhatsappPhoneNumber(),
                 tenant.getId() + "@" + inboundEmailDomain,
-                tenant.isSquareConnected());
+                tenant.isSquareConnected(),
+                tenant.isQuickbooksConnected());
     }
 }
