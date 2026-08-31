@@ -99,7 +99,7 @@ export function VolatilityOverview() {
 
   return (
     <div className="mb-6">
-      <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Visualizations &amp; Volatility Overview</h2>
+      <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Volatility Overview</h2>
 
       <div className={cardClasses}>
         <div className="flex flex-wrap items-end gap-3 mb-6">

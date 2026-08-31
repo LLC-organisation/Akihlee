@@ -251,10 +251,25 @@ For production:
   actual bug in `SquareOAuthService.buildAuthorizeUrl` — it sent
   `session=false` unconditionally regardless of environment. Fixed by
   omitting the param entirely outside Production.
-- If it's still failing, check the raw URL the browser was sent to
-  (Network tab, not Console — a failed top-level navigation shows up there
-  as a normal `GET ... 400` request/response pair) for anything else that
-  doesn't match [Square's reference table](https://developer.squareup.com/docs/oauth-api/walkthrough):
+- **Most likely cause: no active sandbox seller session.** `connect.squareupsandbox.com/oauth2/authorize`
+  302s to `squareupsandbox.com/oauth2/authorize` (same query string —
+  expected, not a bug; this is why the URL you see fail in the browser's
+  Network tab has no `connect.` prefix even though our code sends the
+  request to the `connect.` host). If the browser has no sandbox seller
+  session yet, THAT page 400s with a JSON payload embedded in the HTML
+  body: `{"step":"ERROR","payload":{"error":"To start the OAuth flow for
+  a sandbox account, first launch the seller test account from the
+  Developer Console."}}`. Fix: on the
+  [Developer Dashboard](https://developer.squareup.com/apps), open the
+  app in **Sandbox** mode, go to **Sandbox Test Accounts**, and click
+  **Open** on a test account — in the *same browser* — before retrying
+  "Connect with Square". This is a one-time-per-browser-session step for
+  testing, not something the app can do on the user's behalf; there is no
+  code fix for it.
+- If it's still failing after that, check the raw URL the browser was
+  sent to (Network tab, not Console — a failed top-level navigation shows
+  up there as a normal `GET ... 400` request/response pair) for anything
+  else that doesn't match [Square's reference table](https://developer.squareup.com/docs/oauth-api/walkthrough):
   wrong `client_id` prefix for the environment (`sandbox-sq0idb-...` vs
   `sq0idb-...`), or a scope not enabled for the app.
 

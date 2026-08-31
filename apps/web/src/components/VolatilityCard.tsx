@@ -22,7 +22,7 @@ const RATING_STYLES = {
 function insightCopy(targetLabel: string, stats: VolatilityStats, unitLabel: string): string {
   const sd = formatCurrency(stats.standardDeviation);
   const buffer = formatCurrency(stats.standardDeviation * 2);
-  return `${targetLabel} fluctuates by an average of ±${sd} per ${unitLabel}. Recommended cash reserve buffer: 2x SD (${buffer}).`;
+  return `${targetLabel} fluctuates by an average of +${sd} per ${unitLabel}. Recommended cash reserve buffer: 2x SD (${buffer}).`;
 }
 
 export function VolatilityCard({
@@ -52,7 +52,7 @@ export function VolatilityCard({
         <div>
           <p className="text-xs text-slate-400 dark:text-slate-500 mb-1">Standard deviation</p>
           <p className="text-3xl font-bold text-slate-900 dark:text-white">
-            &plusmn;{formatCurrency(stats.standardDeviation)}
+            +{formatCurrency(stats.standardDeviation)}
             <span className="text-base font-medium text-slate-400 dark:text-slate-500"> / {unitLabel}</span>
           </p>
         </div>

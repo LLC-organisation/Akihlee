@@ -109,7 +109,7 @@ public class AnalyticsService {
     public List<CategoryAmount> bankTransactionCategoryBreakdown(LocalDate from, LocalDate to) {
         Map<String, BigDecimal> totals = new LinkedHashMap<>();
         for (BankTransaction txn : approvedExpenseTransactions(from, to)) {
-            totals.merge(categoryOf(txn.getCategory()), txn.getAmount(), BigDecimal::add);
+            totals.merge(categoryOf(txn.getCategory()), magnitude(txn), BigDecimal::add);
         }
         return toCategoryList(totals);
     }
@@ -119,7 +119,7 @@ public class AnalyticsService {
         Granularity resolved = resolveGranularity(granularity, from, to);
         Map<String, BigDecimal> totals = new TreeMap<>();
         for (BankTransaction txn : approvedExpenseTransactions(from, to)) {
-            totals.merge(bucketKey(txn.getTransactionDate(), resolved), txn.getAmount(), BigDecimal::add);
+            totals.merge(bucketKey(txn.getTransactionDate(), resolved), magnitude(txn), BigDecimal::add);
         }
         return toTrendList(totals);
     }
@@ -148,7 +148,7 @@ public class AnalyticsService {
             BigDecimal[] pair = buckets.computeIfAbsent(
                     bucketKey(txn.getTransactionDate(), resolved), k -> new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
             int index = txn.getType() == BankTransaction.Type.INCOME ? 0 : 1;
-            pair[index] = pair[index].add(txn.getAmount());
+            pair[index] = pair[index].add(magnitude(txn));
         }
         return buckets.entrySet().stream()
                 .map(e -> new MonthlyTrendPoint(e.getKey(), e.getValue()[0], e.getValue()[1]))
@@ -183,7 +183,7 @@ public class AnalyticsService {
         }
         for (BankTransaction txn : bankTransactions) {
             if (txn.getType() != BankTransaction.Type.EXPENSE) continue;
-            categoryTotals.merge(categoryOf(txn.getCategory()), txn.getAmount(), BigDecimal::add);
+            categoryTotals.merge(categoryOf(txn.getCategory()), magnitude(txn), BigDecimal::add);
         }
 
         Map<String, BigDecimal[]> monthly = new TreeMap<>();
@@ -196,7 +196,7 @@ public class AnalyticsService {
             if (txn.getType() == BankTransaction.Type.TRANSFER) continue;
             BigDecimal[] pair = monthlyBucket(monthly, txn.getTransactionDate());
             int index = txn.getType() == BankTransaction.Type.INCOME ? 0 : 1;
-            pair[index] = pair[index].add(txn.getAmount());
+            pair[index] = pair[index].add(magnitude(txn));
         }
         List<MonthlyTrendPoint> monthlyTrend = monthly.entrySet().stream()
                 .map(e -> new MonthlyTrendPoint(e.getKey(), e.getValue()[0], e.getValue()[1]))
@@ -281,8 +281,22 @@ public class AnalyticsService {
     private static BigDecimal sumByType(List<BankTransaction> transactions, BankTransaction.Type type) {
         return transactions.stream()
                 .filter(t -> t.getType() == type)
-                .map(BankTransaction::getAmount)
+                .map(AnalyticsService::magnitude)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /**
+     * A bank transaction's amount as extracted can carry whatever sign the
+     * raw statement printed it with (e.g. a debit shown as "-150.00"), but
+     * its Type is already the authoritative signal for direction — every
+     * aggregate here is either grouped by type or filtered to one type
+     * before summing. Without normalizing to a magnitude, a category or
+     * period dominated by negative-signed EXPENSE rows nets out negative,
+     * which breaks anything that assumes spending totals are non-negative
+     * (e.g. a pie chart's proportions).
+     */
+    private static BigDecimal magnitude(BankTransaction txn) {
+        return txn.getAmount().abs();
     }
 
     private List<LineItem> parseLineItems(ExtractedData data) {

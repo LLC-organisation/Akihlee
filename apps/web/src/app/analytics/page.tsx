@@ -16,6 +16,7 @@ import { AppSidebar } from '@/components/AppSidebar';
 import { CategoryDrilldownPanel } from '@/components/CategoryDrilldownPanel';
 import { AiCfoChatWidget } from '@/components/AiCfoChatWidget';
 import { CurrencyCode, CURRENCIES, formatCurrency } from '@/lib/utils/currency';
+import { useScrollReveal } from '@/lib/hooks/useScrollReveal';
 import {
   formatPeriodLabel,
   granularityForSpan,
@@ -50,24 +51,36 @@ function DonutChart({
   currency: CurrencyCode;
   onSelectCategory: (category: string) => void;
 }) {
+  const { ref, revealed } = useScrollReveal<HTMLDivElement>();
+
   if (data.length === 0) return <EmptyState message="No categorized spending in this range yet." />;
 
   const top = data.slice(0, MAX_PIE_SLICES);
   const restTotal = data.slice(MAX_PIE_SLICES).reduce((sum, d) => sum + d.total, 0);
-  const slices = restTotal > 0 ? [...top, { category: 'Other', total: restTotal }] : top;
-  const total = slices.reduce((sum, s) => sum + s.total, 0);
+  const slices = restTotal !== 0 ? [...top, { category: 'Other', total: restTotal }] : top;
+
+  // A pie/donut can only represent non-negative shares of a whole. A
+  // negative category total (e.g. a mis-signed bank transaction inflating
+  // one category into negative territory) has no sensible slice size — if
+  // it were included in the fraction math below, it can make the shared
+  // denominator tiny or negative and blow up every other slice's fraction,
+  // rendering one category as the entire pie and hiding the rest. Such a
+  // slice is excluded from the arc geometry entirely; it still appears in
+  // the list below with its real (negative) value so nothing goes missing.
+  const positiveTotal = slices.reduce((sum, s) => sum + Math.max(0, s.total), 0);
 
   const radius = 60;
   const circumference = 2 * Math.PI * radius;
   let cumulative = 0;
 
   return (
-    <div className="flex flex-col sm:flex-row items-center gap-6">
+    <div ref={ref} className="flex flex-col sm:flex-row items-center gap-6">
       <svg viewBox="0 0 160 160" className="w-40 h-40 shrink-0 -rotate-90">
         <circle cx="80" cy="80" r={radius} fill="none" className="stroke-slate-100 dark:stroke-white/5" strokeWidth="20" />
-        {total > 0 &&
+        {positiveTotal > 0 &&
           slices.map((slice, i) => {
-            const fraction = slice.total / total;
+            if (slice.total <= 0) return null;
+            const fraction = slice.total / positiveTotal;
             const dash = fraction * circumference;
             const offset = -cumulative * circumference;
             cumulative += fraction;
@@ -77,8 +90,9 @@ function DonutChart({
                 cx="80" cy="80" r={radius} fill="none"
                 stroke={PALETTE[i % PALETTE.length]}
                 strokeWidth="20"
-                strokeDasharray={`${dash} ${circumference - dash}`}
+                strokeDasharray={revealed ? `${dash} ${circumference - dash}` : `0 ${circumference}`}
                 strokeDashoffset={offset}
+                style={{ transition: 'stroke-dasharray 900ms ease-out', transitionDelay: `${i * 100}ms` }}
               />
             );
           })}
@@ -110,20 +124,25 @@ function DonutChart({
 }
 
 function TrendBarChart({ data, granularity, currency }: { data: TrendPoint[]; granularity: Granularity; currency: CurrencyCode }) {
+  const { ref, revealed } = useScrollReveal<HTMLDivElement>();
+
   if (data.length === 0) return <EmptyState message="No approved spending in this range yet." />;
 
   const max = Math.max(1, ...data.map((d) => d.total));
   return (
-    <div className="overflow-x-auto">
+    <div ref={ref} className="overflow-x-auto">
       <div className="flex items-end gap-2 h-48 min-w-max px-1">
-        {data.map((point) => (
+        {data.map((point, i) => (
           <div key={point.period} className="flex flex-col items-center justify-end h-full gap-1.5 w-12 shrink-0">
             <span className="text-[10px] font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">
               {point.total > 0 ? formatCurrency(point.total, currency) : ''}
             </span>
             <div
-              className="w-full rounded-t-md bg-accent-gradient transition-all duration-300"
-              style={{ height: `${Math.max(2, (point.total / max) * 100)}%` }}
+              className="w-full rounded-t-md bg-accent-gradient transition-all duration-700 ease-out"
+              style={{
+                height: revealed ? `${Math.max(2, (point.total / max) * 100)}%` : '0%',
+                transitionDelay: `${i * 40}ms`,
+              }}
             />
             <span className="text-[9px] text-slate-400 dark:text-slate-500 whitespace-nowrap">
               {formatPeriodLabel(point.period, granularity)}
@@ -144,11 +163,13 @@ function CombinedTrendChart({
   granularity: Granularity;
   currency: CurrencyCode;
 }) {
+  const { ref, revealed } = useScrollReveal<HTMLDivElement>();
+
   if (data.length === 0) return <EmptyState message="No approved transactions in this range yet." />;
 
   const max = Math.max(1, ...data.map((d) => Math.max(d.income, d.expense)));
   return (
-    <div>
+    <div ref={ref}>
       <div className="flex items-center gap-4 mb-4 text-xs text-slate-500 dark:text-slate-400">
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Income
@@ -159,17 +180,23 @@ function CombinedTrendChart({
       </div>
       <div className="overflow-x-auto">
         <div className="flex items-end gap-4 h-48 min-w-max px-1">
-          {data.map((point) => (
+          {data.map((point, i) => (
             <div key={point.month} className="flex flex-col items-center justify-end h-full gap-1.5 shrink-0">
               <div className="flex items-end gap-1 h-full">
                 <div
-                  className="w-4 rounded-t-md bg-emerald-500 transition-all duration-300"
-                  style={{ height: `${Math.max(2, (point.income / max) * 100)}%` }}
+                  className="w-4 rounded-t-md bg-emerald-500 transition-all duration-700 ease-out"
+                  style={{
+                    height: revealed ? `${Math.max(2, (point.income / max) * 100)}%` : '0%',
+                    transitionDelay: `${i * 50}ms`,
+                  }}
                   title={`Income: ${formatCurrency(point.income, currency)}`}
                 />
                 <div
-                  className="w-4 rounded-t-md bg-rose-500 transition-all duration-300"
-                  style={{ height: `${Math.max(2, (point.expense / max) * 100)}%` }}
+                  className="w-4 rounded-t-md bg-rose-500 transition-all duration-700 ease-out"
+                  style={{
+                    height: revealed ? `${Math.max(2, (point.expense / max) * 100)}%` : '0%',
+                    transitionDelay: `${i * 50 + 25}ms`,
+                  }}
                   title={`Expenses: ${formatCurrency(point.expense, currency)}`}
                 />
               </div>
