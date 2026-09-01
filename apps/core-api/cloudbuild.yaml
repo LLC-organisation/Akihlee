@@ -18,6 +18,7 @@ substitutions:
   _S3_ENDPOINT: ''
   _S3_ACCESS_KEY: ''
   _S3_BUCKET_DOCUMENTS: ''
+  _S3_BUCKET_EXPORTS: ''
   _SQUARE_ENVIRONMENT: sandbox
   _SQUARE_OAUTH_CLIENT_ID: ''
   _SQUARE_OAUTH_REDIRECT_URI: ''
@@ -34,6 +35,16 @@ substitutions:
   _BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0'
   _BEDROCK_GUARDRAIL_ID: 'st8gvnhjskv9'
   _BEDROCK_GUARDRAIL_VERSION: '1'
+  # Twilio/email were configured directly on the Cloud Run service via
+  # Console at some point and have been running on that frozen snapshot
+  # ever since (this trigger's Deploy step never actually applied — see
+  # the note below the Deploy step). Adding them here so the *next* real
+  # deploy doesn't silently wipe WhatsApp/email — set the real values on
+  # the trigger's substitution variables, same as Square/QuickBooks above.
+  _TWILIO_ACCOUNT_SID: ''
+  _TWILIO_WHATSAPP_NUMBER: 'whatsapp:+14155238886'
+  _TWILIO_WEBHOOK_VALIDATION_ENABLED: 'true'
+  _EMAIL_INBOUND_DOMAIN: 'receipts.akihlee.com'
 
 options:
   logging: CLOUD_LOGGING_ONLY
@@ -74,6 +85,23 @@ steps:
   # config lives in git and Secret Manager, not in one-off Console edits
   # that the next automated deploy would silently discard (exactly what
   # produced the JWT_SECRET crash this replaces).
+  #
+  # NOTE (2026-09-01): this Deploy step was never actually being executed —
+  # the live Cloud Build trigger had its own inline build config baked in
+  # (from the Cloud Run Console's "continuous deployment" quick-setup),
+  # completely separate from this file, doing a bare `gcloud run services
+  # update --image=... --update-labels=...` with none of the flags below.
+  # The service ran for a long time on a frozen Console-configured env var
+  # snapshot as a result (including REDIS_*/RABBITMQ_*/SPRING_PROFILES_ACTIVE=
+  # local/an old "ENCRYPTION_KEY" name, none of which the app actually
+  # reads — confirmed dead via full-repo audit — so they're deliberately
+  # NOT reproduced here). The trigger now points at this file; this list
+  # is the actual, audited set of env vars/secrets the app reads.
+  #
+  # ^@^ prefix switches --set-env-vars'/--set-secrets' pair delimiter from
+  # "," to "@" — CORS_ALLOWED_ORIGINS' value is itself a comma-separated
+  # list of origins, which silently broke gcloud's default comma-parsing
+  # (and every env var listed after it) until this was found.
   - id: Deploy
     name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
     entrypoint: gcloud
@@ -89,8 +117,8 @@ steps:
       - --memory=1Gi
       - --cpu=1
       - --update-labels=managed-by=gcp-cloud-build-deploy-cloud-run,gcb-trigger-id=$_TRIGGER_ID,gcb-trigger-region=$LOCATION,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID
-      - --set-env-vars=CORS_ALLOWED_ORIGINS=$_CORS_ALLOWED_ORIGINS,APP_WEB_URL=$_APP_WEB_URL,DATABASE_URL=$_DATABASE_URL,DATABASE_USERNAME=$_DATABASE_USERNAME,GCP_PROJECT_ID=$_GCP_PROJECT_ID,S3_ENDPOINT=$_S3_ENDPOINT,S3_ACCESS_KEY=$_S3_ACCESS_KEY,S3_BUCKET_DOCUMENTS=$_S3_BUCKET_DOCUMENTS,SQUARE_ENVIRONMENT=$_SQUARE_ENVIRONMENT,SQUARE_OAUTH_CLIENT_ID=$_SQUARE_OAUTH_CLIENT_ID,SQUARE_OAUTH_REDIRECT_URI=$_SQUARE_OAUTH_REDIRECT_URI,QUICKBOOKS_ENVIRONMENT=$_QUICKBOOKS_ENVIRONMENT,QUICKBOOKS_OAUTH_CLIENT_ID=$_QUICKBOOKS_OAUTH_CLIENT_ID,QUICKBOOKS_OAUTH_REDIRECT_URI=$_QUICKBOOKS_OAUTH_REDIRECT_URI,AWS_REGION=$_AWS_REGION,BEDROCK_MODEL_ID=$_BEDROCK_MODEL_ID,BEDROCK_GUARDRAIL_ID=$_BEDROCK_GUARDRAIL_ID,BEDROCK_GUARDRAIL_VERSION=$_BEDROCK_GUARDRAIL_VERSION
-      - --set-secrets=JWT_SECRET=JWT_SECRET:latest,DATABASE_PASSWORD=DATABASE_PASSWORD:latest,S3_SECRET_KEY=S3_SECRET_KEY:latest,INTERNAL_API_KEY=INTERNAL_API_KEY:latest,SQUARE_OAUTH_CLIENT_SECRET=SQUARE_OAUTH_CLIENT_SECRET:latest,SQUARE_ACCESS_TOKEN=SQUARE_ACCESS_TOKEN:latest,QUICKBOOKS_OAUTH_CLIENT_SECRET=QUICKBOOKS_OAUTH_CLIENT_SECRET:latest,QUICKBOOKS_TOKEN_ENCRYPTION_KEY=QUICKBOOKS_TOKEN_ENCRYPTION_KEY:latest,AWS_ACCESS_KEY_ID=AWS_ACCESS_KEY_ID:latest,AWS_SECRET_ACCESS_KEY=AWS_SECRET_ACCESS_KEY:latest
+      - --set-env-vars=^@^CORS_ALLOWED_ORIGINS=$_CORS_ALLOWED_ORIGINS@APP_WEB_URL=$_APP_WEB_URL@DATABASE_URL=$_DATABASE_URL@DATABASE_USERNAME=$_DATABASE_USERNAME@GCP_PROJECT_ID=$_GCP_PROJECT_ID@S3_ENDPOINT=$_S3_ENDPOINT@S3_ACCESS_KEY=$_S3_ACCESS_KEY@S3_BUCKET_DOCUMENTS=$_S3_BUCKET_DOCUMENTS@S3_BUCKET_EXPORTS=$_S3_BUCKET_EXPORTS@SQUARE_ENVIRONMENT=$_SQUARE_ENVIRONMENT@SQUARE_OAUTH_CLIENT_ID=$_SQUARE_OAUTH_CLIENT_ID@SQUARE_OAUTH_REDIRECT_URI=$_SQUARE_OAUTH_REDIRECT_URI@QUICKBOOKS_ENVIRONMENT=$_QUICKBOOKS_ENVIRONMENT@QUICKBOOKS_OAUTH_CLIENT_ID=$_QUICKBOOKS_OAUTH_CLIENT_ID@QUICKBOOKS_OAUTH_REDIRECT_URI=$_QUICKBOOKS_OAUTH_REDIRECT_URI@AWS_REGION=$_AWS_REGION@BEDROCK_MODEL_ID=$_BEDROCK_MODEL_ID@BEDROCK_GUARDRAIL_ID=$_BEDROCK_GUARDRAIL_ID@BEDROCK_GUARDRAIL_VERSION=$_BEDROCK_GUARDRAIL_VERSION@TWILIO_ACCOUNT_SID=$_TWILIO_ACCOUNT_SID@TWILIO_WHATSAPP_NUMBER=$_TWILIO_WHATSAPP_NUMBER@TWILIO_WEBHOOK_VALIDATION_ENABLED=$_TWILIO_WEBHOOK_VALIDATION_ENABLED@EMAIL_INBOUND_DOMAIN=$_EMAIL_INBOUND_DOMAIN
+      - --set-secrets=^@^JWT_SECRET=JWT_SECRET:latest@DATABASE_PASSWORD=DATABASE_PASSWORD:latest@S3_SECRET_KEY=S3_SECRET_KEY:latest@INTERNAL_API_KEY=INTERNAL_API_KEY:latest@SQUARE_OAUTH_CLIENT_SECRET=SQUARE_OAUTH_CLIENT_SECRET:latest@SQUARE_ACCESS_TOKEN=SQUARE_ACCESS_TOKEN:latest@QUICKBOOKS_OAUTH_CLIENT_SECRET=QUICKBOOKS_OAUTH_CLIENT_SECRET:latest@QUICKBOOKS_TOKEN_ENCRYPTION_KEY=QUICKBOOKS_TOKEN_ENCRYPTION_KEY:latest@AWS_ACCESS_KEY_ID=AWS_ACCESS_KEY_ID:latest@AWS_SECRET_ACCESS_KEY=AWS_SECRET_ACCESS_KEY:latest@TWILIO_AUTH_TOKEN=TWILIO_AUTH_TOKEN:latest@EMAIL_WEBHOOK_SECRET=EMAIL_WEBHOOK_SECRET:latest
       - --quiet
 
 images:
