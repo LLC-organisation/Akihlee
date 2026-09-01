@@ -292,7 +292,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             {/* Upload card */}
             <div className={`${cardClasses} p-6 flex flex-col`}>
-              <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-4">Upload Receipt or Invoice</h2>
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-4">Upload Receipt, Invoice or Bank Statement</h2>
 
               {uploadError && (
                 <div

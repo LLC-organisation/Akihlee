@@ -4,20 +4,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { analyticsApi, Granularity, MonthlyTrendPoint } from '@/lib/api-client';
 import { GRANULARITY_UNIT_LABEL, VolatilityRangeKey, volatilityRanges } from '@/lib/utils/date-ranges';
 import { volatilityStats } from '@/lib/utils/statistics';
+import { TARGET_METRICS, TargetMetric, seriesFor, targetMetricInfo } from '@/lib/utils/volatility-metrics';
 import { VolatilityCard } from './VolatilityCard';
+import { VolatilityInfoModal } from './VolatilityInfoModal';
 
 const cardClasses =
   'bg-white dark:bg-surface border border-slate-200 dark:border-white/10 rounded-2xl shadow-sm dark:shadow-none p-6 transition-all duration-200';
 const selectClasses =
   'rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-canvas px-3 py-2 text-sm text-slate-900 dark:text-white focus:border-accent transition-colors duration-200';
-
-type TargetMetric = 'CASH_FLOW' | 'EXPENSE' | 'REVENUE';
-
-const TARGET_METRICS: { key: TargetMetric; label: string }[] = [
-  { key: 'CASH_FLOW', label: 'Cash Flow Volatility' },
-  { key: 'EXPENSE', label: 'Expense Volatility' },
-  { key: 'REVENUE', label: 'Revenue Volatility' },
-];
 
 const GRANULARITIES: { key: Granularity; label: string }[] = [
   { key: 'WEEK', label: 'Weekly' },
@@ -33,17 +27,6 @@ const DEFAULT_GRANULARITY_FOR_RANGE: Record<VolatilityRangeKey, Granularity> = {
   '4Q': 'QUARTER',
 };
 
-function seriesFor(points: MonthlyTrendPoint[], metric: TargetMetric): number[] {
-  switch (metric) {
-    case 'EXPENSE':
-      return points.map((p) => p.expense);
-    case 'REVENUE':
-      return points.map((p) => p.income);
-    case 'CASH_FLOW':
-      return points.map((p) => p.income - p.expense);
-  }
-}
-
 /**
  * Dashboard risk widget: derives volatility purely from the existing
  * combined-trend analytics endpoint (no separate table) — picks a range,
@@ -57,6 +40,7 @@ export function VolatilityOverview() {
   const [rangeKey, setRangeKey] = useState<VolatilityRangeKey>('12M');
   const [granularity, setGranularity] = useState<Granularity>('MONTH');
   const [targetMetric, setTargetMetric] = useState<TargetMetric>('CASH_FLOW');
+  const [modalOpen, setModalOpen] = useState(false);
 
   const [points, setPoints] = useState<MonthlyTrendPoint[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,7 +77,7 @@ export function VolatilityOverview() {
     load(rangeKey, gran);
   };
 
-  const targetLabel = TARGET_METRICS.find((m) => m.key === targetMetric)!.label;
+  const metric = targetMetricInfo(targetMetric);
   const unitLabel = GRANULARITY_UNIT_LABEL[granularity];
   const stats = volatilityStats(seriesFor(points, targetMetric));
 
@@ -170,8 +154,19 @@ export function VolatilityOverview() {
           </div>
         )}
 
-        {!loading && !error && <VolatilityCard targetLabel={targetLabel} unitLabel={unitLabel} stats={stats} />}
+        {!loading && !error && (
+          <VolatilityCard metric={metric} unitLabel={unitLabel} stats={stats} onOpenModal={() => setModalOpen(true)} />
+        )}
       </div>
+
+      <VolatilityInfoModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        metric={metric}
+        unitLabel={unitLabel}
+        stats={stats}
+        onChangeTargetMetric={setTargetMetric}
+      />
     </div>
   );
 }

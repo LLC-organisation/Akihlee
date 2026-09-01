@@ -31,10 +31,10 @@ export function coefficientOfVariation(values: number[]): number {
 
 export type StabilityRating = 'LOW' | 'MODERATE' | 'HIGH';
 
-/** Low < 15% CV (predictable), Moderate 15-35%, High > 35% (large fluctuations). */
+/** Low < 25% CV (predictable), Moderate 25-50%, High > 50% (large fluctuations). */
 export function stabilityRating(cv: number): StabilityRating {
-  if (cv < 15) return 'LOW';
-  if (cv <= 35) return 'MODERATE';
+  if (cv < 25) return 'LOW';
+  if (cv <= 50) return 'MODERATE';
   return 'HIGH';
 }
 
