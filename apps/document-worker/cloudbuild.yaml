@@ -78,6 +78,12 @@ steps:
       - --region=$_DEPLOY_REGION
       - --platform=managed
       - --no-allow-unauthenticated
+      # min-instances/cpu-throttling are "sticky" revision-template settings
+      # that persist across deploys if simply omitted (unlike --set-env-vars/
+      # --set-secrets, which do fully replace) — they must be explicitly
+      # reset here or the previous always-on config silently survives.
+      - --min-instances=0
+      - --cpu-throttling
       - --concurrency=1
       - --max-instances=2
       - --cpu-boost
