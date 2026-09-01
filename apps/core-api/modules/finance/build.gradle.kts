@@ -40,9 +40,9 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.mockito:mockito-core")
 
-    // RabbitTemplate — only needed to @MockBean it when testing
+    // PublisherInterface — only needed to @MockBean it when testing
     // SquareSyncService, which now depends on DocumentService (documents
     // module declares this as `implementation`, so it isn't exposed
     // transitively to modules that merely depend on `documents`).
-    testImplementation("org.springframework.boot:spring-boot-starter-amqp")
+    testImplementation("com.google.cloud:google-cloud-pubsub:1.151.0")
 }

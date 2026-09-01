@@ -44,17 +44,11 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 10MB
-  rabbitmq:
-    host: ${RABBITMQ_HOST}
-    port: ${RABBITMQ_PORT}
-    username: ${RABBITMQ_USERNAME}
-    password: ${RABBITMQ_PASSWORD}
-    virtual-host: ${RABBITMQ_VIRTUAL_HOST:/}
-    # CloudAMQP (and most managed RabbitMQ) serve AMQPS on port 5671, which
-    # is TLS-only — Spring doesn't infer this from the port number, so it
-    # must be enabled explicitly or the connection just hangs/fails.
-    ssl:
-      enabled: ${RABBITMQ_SSL_ENABLED:false}
+
+# No credentials to configure — the Pub/Sub client picks up Application
+# Default Credentials automatically from Cloud Run's metadata server.
+gcp:
+  project-id: ${GCP_PROJECT_ID:akihlee-dev-local}
 
 server:
   # Render (and similar PaaS hosts) inject PORT and expect the app to bind
@@ -78,6 +72,15 @@ s3:
 jwt:
   secret: ${JWT_SECRET}
   expiration-ms: 86400000
+
+# AES-256 key (base64, e.g. `openssl rand -base64 32`) for encrypting
+# QuickBooks OAuth tokens at rest — see AesGcmStringConverter. Blank is
+# tolerated at boot (so the app doesn't hard-crash in environments that
+# never connect QuickBooks) but any attempt to read/write a QuickBooks
+# token without it configured fails loudly instead of silently storing
+# plaintext.
+security:
+  token-encryption-key: ${QUICKBOOKS_TOKEN_ENCRYPTION_KEY:}
 
 worker:
   api-key: ${INTERNAL_API_KEY}

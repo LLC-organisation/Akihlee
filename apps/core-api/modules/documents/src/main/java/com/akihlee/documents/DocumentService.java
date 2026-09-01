@@ -6,9 +6,15 @@ import com.akihlee.identity.TenantContext;
 import com.akihlee.identity.User;
 import com.akihlee.identity.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.api.core.ApiFuture;
+import com.google.api.core.ApiFutureCallback;
+import com.google.api.core.ApiFutures;
+import com.google.cloud.pubsub.v1.PublisherInterface;
+import com.google.protobuf.ByteString;
+import com.google.pubsub.v1.PubsubMessage;
+import com.google.common.util.concurrent.MoreExecutors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -36,7 +42,7 @@ public class DocumentService {
     private final ExtractedDataRepository extractedDataRepository;
     private final BankTransactionRepository bankTransactionRepository;
     private final StorageService storageService;
-    private final RabbitTemplate rabbitTemplate;
+    private final PublisherInterface documentsReceivedPublisher;
     private final ObjectMapper objectMapper;
     private final AuditLogService auditLogService;
     private final UserRepository userRepository;
@@ -46,7 +52,7 @@ public class DocumentService {
             ExtractedDataRepository extractedDataRepository,
             BankTransactionRepository bankTransactionRepository,
             StorageService storageService,
-            RabbitTemplate rabbitTemplate,
+            PublisherInterface documentsReceivedPublisher,
             ObjectMapper objectMapper,
             AuditLogService auditLogService,
             UserRepository userRepository) {
@@ -54,7 +60,7 @@ public class DocumentService {
         this.extractedDataRepository = extractedDataRepository;
         this.bankTransactionRepository = bankTransactionRepository;
         this.storageService = storageService;
-        this.rabbitTemplate = rabbitTemplate;
+        this.documentsReceivedPublisher = documentsReceivedPublisher;
         this.objectMapper = objectMapper;
         this.auditLogService = auditLogService;
         this.userRepository = userRepository;
@@ -239,11 +245,27 @@ public class DocumentService {
     private void publishDocumentReceived(Document document) {
         try {
             String payload = objectMapper.writeValueAsString(DocumentReceivedEvent.from(document));
-            rabbitTemplate.convertAndSend(RabbitMQConfig.DOCUMENTS_RECEIVED_QUEUE, payload);
+            PubsubMessage message = PubsubMessage.newBuilder()
+                    .setData(ByteString.copyFromUtf8(payload))
+                    .build();
+            ApiFuture<String> future = documentsReceivedPublisher.publish(message);
+            // Fire-and-forget: don't block the upload waiting for the publish
+            // ack, only log if it turns out to have failed. Don't fail the
+            // upload if the OCR pipeline is unreachable — the document just
+            // stays at PROCESSING until it's requeued/retried manually; the
+            // user's upload still succeeds either way.
+            ApiFutures.addCallback(future, new ApiFutureCallback<String>() {
+                @Override
+                public void onFailure(Throwable t) {
+                    log.error("Failed to queue document {} for OCR processing", document.getId(), t);
+                }
+
+                @Override
+                public void onSuccess(String messageId) {
+                    // No-op — success is the expected case.
+                }
+            }, MoreExecutors.directExecutor());
         } catch (Exception e) {
-            // Don't fail the upload if the OCR pipeline is unreachable — the
-            // document just stays at PROCESSING until it's requeued/retried
-            // manually; the user's upload still succeeds either way.
             log.error("Failed to queue document {} for OCR processing", document.getId(), e);
         }
     }

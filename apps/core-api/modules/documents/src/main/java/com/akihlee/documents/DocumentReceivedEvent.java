@@ -1,7 +1,7 @@
 package com.akihlee.documents;
 
 /**
- * Published to RabbitMQ on upload; consumed by document-worker to trigger OCR.
+ * Published to Pub/Sub on upload; consumed by document-worker to trigger OCR.
  * Field names are snake_case to match the Python consumer's expected payload.
  */
 public record DocumentReceivedEvent(

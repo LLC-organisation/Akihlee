@@ -4,10 +4,10 @@ import com.akihlee.identity.Tenant;
 import com.akihlee.identity.TenantContext;
 import com.akihlee.identity.TenantRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.cloud.pubsub.v1.PublisherInterface;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -54,10 +54,10 @@ class DocumentServiceTest {
     @Autowired
     private InMemoryStorageService storageService;
 
-    // Publishing to RabbitMQ is irrelevant to tenant-isolation behavior under
-    // test here, so it's mocked rather than requiring a real broker.
+    // Publishing to Pub/Sub is irrelevant to tenant-isolation behavior under
+    // test here, so it's mocked rather than requiring real GCP credentials.
     @MockBean
-    private RabbitTemplate rabbitTemplate;
+    private PublisherInterface documentsReceivedPublisher;
 
     private Tenant tenantA;
     private Tenant tenantB;

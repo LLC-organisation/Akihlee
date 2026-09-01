@@ -11,7 +11,7 @@ import com.squareup.square.models.Payment;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import com.google.cloud.pubsub.v1.PublisherInterface;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -71,7 +71,7 @@ class SquareSyncServiceTest {
     private StorageService storageService;
 
     @MockBean
-    private RabbitTemplate rabbitTemplate;
+    private PublisherInterface documentsReceivedPublisher;
 
     // Only exercised by SquareSyncService when a tenant has connected via
     // OAuth and their token is near expiry — none of these tests connect a

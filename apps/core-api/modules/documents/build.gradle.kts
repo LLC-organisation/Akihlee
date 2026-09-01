@@ -17,7 +17,7 @@ dependencies {
     implementation("software.amazon.awssdk:url-connection-client:2.26.20")
 
     // For publishing document-received events to the OCR worker
-    implementation("org.springframework.boot:spring-boot-starter-amqp")
+    implementation("com.google.cloud:google-cloud-pubsub:1.151.0")
 
     // For sending/receiving WhatsApp messages via Twilio
     implementation("com.twilio.sdk:twilio:10.9.2")
