@@ -60,3 +60,14 @@ label:has(input:focus-visible) {
   left: -10rem;
   background: #06b6d4;
 }
+
+/* Scrollable regions that should scroll without showing a track — e.g. the
+   sidebar's nav rail, which is narrow enough that a visible scrollbar reads
+   as a stray line through the icons rather than a real affordance. */
+.no-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* legacy Edge */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari */
+}

@@ -41,10 +41,10 @@ export function ThemeToggle({ rail = false }: { rail?: boolean }) {
         type="button"
         onClick={toggle}
         aria-label={label}
-        className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:text-blue-700 dark:hover:text-blue-400 transition-colors duration-200"
+        className="flex items-center justify-center gap-0 group-hover/sidebar:justify-start group-hover/sidebar:gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:text-blue-700 dark:hover:text-blue-400 transition-colors duration-200"
       >
         {icon}
-        <span className="whitespace-nowrap opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200">
+        <span className="inline-block max-w-0 overflow-hidden whitespace-nowrap opacity-0 group-hover/sidebar:max-w-[160px] group-hover/sidebar:opacity-100 transition-all duration-200">
           {label}
         </span>
       </button>

@@ -184,6 +184,20 @@ export default function Home() {
             </Link>
           </section>
         </main>
+
+        <footer className="border-t border-slate-200 dark:border-white/10">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500 dark:text-slate-400">
+            <span>&copy; {new Date().getFullYear()} Akihlee LLC. All rights reserved.</span>
+            <div className="flex items-center gap-6">
+              <Link href="/privacy" className="hover:text-slate-900 dark:hover:text-white transition-colors duration-200">
+                Privacy Policy
+              </Link>
+              <a href="mailto:admin@akihlee.com" className="hover:text-slate-900 dark:hover:text-white transition-colors duration-200">
+                Support
+              </a>
+            </div>
+          </div>
+        </footer>
       </div>
     </div>
   );

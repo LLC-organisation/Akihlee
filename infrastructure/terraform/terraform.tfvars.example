@@ -1,0 +1,50 @@
+# Copy to terraform.tfvars (gitignored) and fill in before the first
+# apply. See README.md for how to pull the real substitution values off
+# the live Cloud Build triggers.
+
+project_id    = "hallowed-index-504918-b4"
+region        = "europe-west1"
+github_owner  = "LLC-organisation"
+github_repo   = "Akihlee"
+deploy_branch = "^main$"
+
+core_api_substitutions = {
+  _CORS_ALLOWED_ORIGINS = "https://your-vercel-domain.example"
+  _APP_WEB_URL           = "https://your-vercel-domain.example"
+  _DATABASE_URL          = ""
+  _DATABASE_USERNAME     = ""
+  _RABBITMQ_HOST         = ""
+  _RABBITMQ_PORT         = "5671"
+  _RABBITMQ_USERNAME     = ""
+  _RABBITMQ_VIRTUAL_HOST = "/"
+  _RABBITMQ_SSL_ENABLED  = "true"
+  _S3_ENDPOINT           = ""
+  _S3_ACCESS_KEY         = ""
+  _S3_BUCKET_DOCUMENTS   = ""
+  _SQUARE_ENVIRONMENT       = "sandbox"
+  _SQUARE_OAUTH_CLIENT_ID   = ""
+  _SQUARE_OAUTH_REDIRECT_URI = ""
+  _AWS_REGION               = "us-east-1"
+  _BEDROCK_MODEL_ID         = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+  _BEDROCK_GUARDRAIL_ID     = "st8gvnhjskv9"
+  _BEDROCK_GUARDRAIL_VERSION = "1"
+}
+
+document_worker_substitutions = {
+  _CORE_API_URL = "https://akihlee-api-302086001342.europe-west1.run.app"
+  _DATABASE_URL = ""
+  _RABBITMQ_HOST         = ""
+  _RABBITMQ_PORT         = "5671"
+  _RABBITMQ_USERNAME     = ""
+  _RABBITMQ_VIRTUAL_HOST = "/"
+  _RABBITMQ_SSL_ENABLED  = "true"
+  _S3_ENDPOINT         = ""
+  _S3_ACCESS_KEY       = ""
+  _S3_BUCKET_DOCUMENTS = ""
+  _AWS_REGION   = "us-east-1"
+  _BEDROCK_MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+  _VISION_EXTRACTION_ENABLED         = "true"
+  _VISION_EXTRACTION_TIMEOUT_SECONDS = "150"
+  _OCR_CONFIDENCE_THRESHOLD          = "0.7"
+  _MAX_PDF_PAGES                     = "5"
+}

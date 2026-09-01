@@ -66,7 +66,12 @@ export default function DocumentsPage() {
     setError(null);
     try {
       const docs = await documentsApi.list();
-      setDocuments(docs);
+      // Newest upload first — the backend doesn't guarantee an order (plain
+      // findByTenantId), so sort client-side by date uploaded.
+      const sorted = [...docs].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setDocuments(sorted);
     } catch {
       setError('Could not load your documents. Check your connection and try again.');
     } finally {

@@ -36,10 +36,14 @@ function Logo() {
 // below), which is what's actually being hovered, not this item itself.
 // Present in the DOM (just visually faded at opacity-0) rather than
 // tooltip-style, so screen readers always get the name regardless of
-// hover state.
+// hover state. Collapsed to max-w-0 (not just opacity-0) so it takes no
+// layout width while the rail is narrow — an invisible-but-present label
+// was pulling `justify-center` off-balance and shoving the icon toward
+// the left edge of the collapsed rail, rather than the icon sitting
+// centered alone.
 function RailLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="whitespace-nowrap opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-200">
+    <span className="inline-block max-w-0 overflow-hidden whitespace-nowrap opacity-0 group-hover/sidebar:max-w-[160px] group-hover/sidebar:opacity-100 transition-all duration-200">
       {children}
     </span>
   );
@@ -147,19 +151,31 @@ const ADMIN_LINKS = [
   },
 ] as const;
 
-function navLinkClasses(active: boolean): string {
-  return `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors duration-200 ${
+// `rail` items center their icon while the sidebar sits collapsed to icon
+// width, then fall back to left-aligned (icon, gap, label) once
+// `group-hover/sidebar` widens it — otherwise the icon sits under the
+// left padding alone and reads as pushed off-center in the narrow rail.
+function navLinkClasses(active: boolean, rail = false): string {
+  return `flex items-center px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors duration-200 ${
+    rail ? 'justify-center gap-0 group-hover/sidebar:justify-start group-hover/sidebar:gap-3' : 'gap-3'
+  } ${
     active
       ? 'bg-slate-900 text-white dark:bg-white dark:text-canvas'
       : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white'
   }`;
 }
 
+// No baked-in gap — callers add `gap-3` (mobile) or the rail's
+// centered/expanding pair (see navLinkClasses) themselves, since a fixed
+// gap next to a zero-width collapsed RailLabel still reserves its own
+// space and throws off `justify-center`.
 const siteLinkClasses =
-  'flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white transition-colors duration-200';
+  'flex items-center px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white transition-colors duration-200';
 
 const logoutLinkClasses =
-  'flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 transition-colors duration-200';
+  'flex items-center px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 transition-colors duration-200';
+
+const railGapJustifyClasses = 'justify-center gap-0 group-hover/sidebar:justify-start group-hover/sidebar:gap-3';
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -187,7 +203,7 @@ export function AppSidebar() {
           ? pathname === link.href || pathname.startsWith(`${link.href}/`)
           : pathname === link.href;
         return (
-          <Link key={link.href} href={link.href} onClick={onNavigate} className={navLinkClasses(active)}>
+          <Link key={link.href} href={link.href} onClick={onNavigate} className={navLinkClasses(active, rail)}>
             <span className="shrink-0">{link.icon}</span>
             {rail ? <RailLabel>{link.label}</RailLabel> : link.label}
           </Link>
@@ -199,7 +215,7 @@ export function AppSidebar() {
             ? pathname === link.href || pathname.startsWith(`${link.href}/`)
             : pathname === link.href;
           return (
-            <Link key={link.href} href={link.href} onClick={onNavigate} className={navLinkClasses(active)}>
+            <Link key={link.href} href={link.href} onClick={onNavigate} className={navLinkClasses(active, rail)}>
               <span className="shrink-0">{link.icon}</span>
               {rail ? <RailLabel>{link.label}</RailLabel> : link.label}
             </Link>
@@ -226,10 +242,17 @@ export function AppSidebar() {
           </span>
         </Link>
 
-        <nav className="flex-1 min-h-0 flex flex-col gap-1 overflow-y-auto overflow-x-hidden">{navItems(undefined, true)}</nav>
+        <nav className="flex-1 min-h-0 flex flex-col gap-1 overflow-y-auto overflow-x-hidden no-scrollbar">
+          {navItems(undefined, true)}
+        </nav>
 
         <div className="flex flex-col gap-1 pt-4 mt-4 border-t border-slate-200 dark:border-white/10 shrink-0">
-          <a href="https://www.akihlee.com" target="_blank" rel="noopener noreferrer" className={siteLinkClasses}>
+          <a
+            href="https://www.akihlee.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`${siteLinkClasses} ${railGapJustifyClasses}`}
+          >
             <span className="shrink-0">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
@@ -238,7 +261,7 @@ export function AppSidebar() {
             <RailLabel>Our Landing Page</RailLabel>
           </a>
           <ThemeToggle rail />
-          <button onClick={handleLogout} className={logoutLinkClasses}>
+          <button onClick={handleLogout} className={`${logoutLinkClasses} ${railGapJustifyClasses}`}>
             <span className="shrink-0">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
@@ -278,7 +301,7 @@ export function AppSidebar() {
         {menuOpen && (
           <nav className="px-4 pb-4 flex flex-col gap-1">
             {navItems(() => setMenuOpen(false))}
-            <a href="https://www.akihlee.com" target="_blank" rel="noopener noreferrer" className={siteLinkClasses}>
+            <a href="https://www.akihlee.com" target="_blank" rel="noopener noreferrer" className={`${siteLinkClasses} gap-3`}>
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
               </svg>
