@@ -156,7 +156,7 @@ class OCRService:
 
         This is the fallback path — VisionExtractionService (Claude Sonnet
         4.5 on Bedrock) is tried first when AWS credentials are configured;
-        QueueConsumer only falls back to this rule-based pipeline when
+        DocumentProcessor only falls back to this rule-based pipeline when
         that's unset, disabled, or its call/response fails.
         """
         pages = [image_paths] if isinstance(image_paths, Path) else image_paths

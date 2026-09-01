@@ -167,7 +167,7 @@ class TestValidateAndReconcileStatement:
         }
         result = _validate_and_reconcile_statement(data)
         assert result["reconciliation_failed"] is True
-        # Below the default OCR_CONFIDENCE_THRESHOLD (0.7) so QueueConsumer
+        # Below the default OCR_CONFIDENCE_THRESHOLD (0.7) so DocumentProcessor
         # routes this to REVIEW_REQUIRED regardless of the model's own
         # self-reported confidence.
         assert result["confidence"] < 0.7

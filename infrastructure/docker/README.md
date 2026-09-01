@@ -8,7 +8,8 @@ Docker Compose setup for local development environment.
 |---------|------|---------|
 | PostgreSQL | 5434 | Transactional database |
 | Redis | 6380 | Cache & session store |
-| RabbitMQ | 5672, 15672 | Message queue |
+| Pub/Sub emulator | 8085 | Local stand-in for GCP Pub/Sub (core-api publishes here) |
+| Pub/Sub forwarder | — | Forwards emulator messages to document-worker as HTTP push (the emulator itself only supports pull) |
 | MinIO | 9000, 9001 | Object storage (S3-compatible) |
 
 > **Credentials**: See `../../.env.example` for default development credentials.
@@ -33,7 +34,7 @@ docker compose down -v
 
 - **PostgreSQL**: `jdbc:postgresql://localhost:5434/akihlee_dev`
 - **Redis**: `redis://localhost:6380` (password required)
-- **RabbitMQ Management**: http://localhost:15672
+- **Pub/Sub emulator**: `localhost:8085` (set `PUBSUB_EMULATOR_HOST=localhost:8085` for anything running natively on the host, e.g. core-api)
 - **MinIO Console**: http://localhost:9001
 
 ## Health Checks

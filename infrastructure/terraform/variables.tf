@@ -10,6 +10,12 @@ variable "region" {
   default     = "europe-west1"
 }
 
+variable "project_number" {
+  description = "GCP project number (distinct from project_id) — used to address the default compute service account and Google-managed service agents, and to build Cloud Run service URLs."
+  type        = string
+  default     = "302086001342"
+}
+
 variable "github_owner" {
   description = "GitHub org that owns the repo, for Cloud Build trigger source config."
   type        = string

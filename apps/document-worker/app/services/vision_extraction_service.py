@@ -1,6 +1,6 @@
 """Structured document extraction via Claude Sonnet 4.5 on AWS Bedrock.
 
-Primary extraction path when AWS_ACCESS_KEY_ID is configured — QueueConsumer
+Primary extraction path when AWS_ACCESS_KEY_ID is configured — DocumentProcessor
 falls back to OCRService's regex/Tesseract pipeline (unchanged) whenever this
 returns None, so an outage or unparseable response degrades a document to
 REVIEW_REQUIRED rather than failing it outright.
@@ -22,7 +22,7 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 # Bedrock's Converse API validates the declared image format against the
-# actual bytes — PDFs are always rasterized to PNG pages by QueueConsumer,
+# actual bytes — PDFs are always rasterized to PNG pages by DocumentProcessor,
 # but a directly-uploaded image keeps its original suffix, so this has to
 # reflect the real file type rather than assuming PNG for everything.
 _BEDROCK_IMAGE_FORMAT_BY_SUFFIX = {
@@ -83,7 +83,7 @@ _CATEGORY_CONFIDENCE_THRESHOLD = 0.65
 # already produces internally (merchant/date/total_amount/...) and what the
 # core-api callback expects for nested objects (lineItems' unitPrice/
 # totalPrice/categoryTag, bankTransactions' payeeOrPayer/type/category) — so
-# QueueConsumer's _send_callback needs zero changes regardless of which
+# DocumentProcessor's _send_callback needs zero changes regardless of which
 # extraction path produced the result. beginning_balance/ending_balance and
 # bank_transactions[].balance are the exception — those are new, and are
 # consumed by reconciliation.py rather than the core-api callback.
@@ -233,10 +233,9 @@ class VisionExtractionService:
 
         try:
             # boto3 is synchronous — run it off the event loop so a slow
-            # extraction can't starve aio_pika's RabbitMQ heartbeat, which
-            # needs the loop free to stay alive (same class of issue as the
-            # Cloud Run --no-cpu-throttling note in this service's
-            # cloudbuild.yaml).
+            # extraction doesn't block the ASGI event loop from serving
+            # other requests (health checks, etc.) while this one is in
+            # flight.
             response = await asyncio.to_thread(
                 self._client.converse,
                 modelId=settings.BEDROCK_MODEL_ID,

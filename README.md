@@ -8,7 +8,7 @@ AI-powered financial intelligence, accounting, and CFO automation platform for s
 - **Frontend**: Vercel (`apps/web`)
 - **Backend**: Render (`apps/core-api`, Docker)
 - **Database & Storage**: Supabase (Postgres + S3-compatible bucket storage)
-- **Message Queue**: CloudAMQP (managed RabbitMQ)
+- **Message Queue**: Google Cloud Pub/Sub (push subscription)
 
 See [Deploying Your Own Instance](#-deploying-your-own-instance) below to stand up the same setup elsewhere.
 
@@ -28,7 +28,7 @@ akihlee/
 │   │   └── build.gradle.kts
 │   ├── document-worker/    # Python + FastAPI - OCR & extraction
 │   │   ├── app/
-│   │   │   ├── services/   # OCR (Tesseract/pdf2image), RabbitMQ consumer
+│   │   │   ├── services/   # OCR (Tesseract/pdf2image), document processor
 │   │   │   └── routers/    # Health checks
 │   │   ├── Dockerfile
 │   │   └── pyproject.toml
@@ -65,7 +65,7 @@ akihlee/
 
 ```bash
 cp .env.example .env   # then edit values if needed — defaults work out of the box
-./run.sh start         # brings up Postgres, Redis, RabbitMQ, MinIO, document-worker, core-api, and web
+./run.sh start         # brings up Postgres, Redis, the Pub/Sub emulator (+forwarder), MinIO, document-worker, core-api, and web
 ./run.sh stop          # stops everything
 ```
 
@@ -74,7 +74,7 @@ cp .env.example .env   # then edit values if needed — defaults work out of the
 
 ### Manual, piece by piece
 
-**1. Infrastructure** (Postgres, Redis, RabbitMQ, MinIO, and `document-worker` — all via Docker Compose):
+**1. Infrastructure** (Postgres, Redis, the Pub/Sub emulator, MinIO, and `document-worker` — all via Docker Compose):
 
 ```bash
 cd infrastructure/docker
@@ -85,9 +85,9 @@ docker compose ps   # verify all healthy
 This starts:
 - PostgreSQL (port 5434)
 - Redis (port 6380)
-- RabbitMQ (ports 5672, 15672 management UI)
+- Pub/Sub emulator (port 8085) + forwarder (the emulator only supports pull, so a small shim forwards messages to document-worker's push endpoint — see `infrastructure/docker/README.md`)
 - MinIO (ports 9000, 9001 console)
-- `document-worker` (OCR pipeline consumer — runs in Docker so Tesseract/poppler don't need installing on the host)
+- `document-worker` (OCR pipeline, receives push events from Pub/Sub — runs in Docker so Tesseract/poppler don't need installing on the host)
 
 **2. Core API** (Java/Spring Boot, run natively for fast iteration):
 
@@ -115,8 +115,8 @@ Frontend: http://localhost:3000
 The live deployment uses four services. Roughly, in order:
 
 1. **Supabase** — create a project, then get the **Session Pooler** connection string (Project Settings → Database → Connection Pooling → *Session mode*, not Transaction mode — Flyway needs session-level features). Also enable Storage and create `documents`/`exports` buckets (S3-compatible; get an S3 access key/secret under Storage settings).
-2. **CloudAMQP** — create a free instance, get the AMQPS host/username/password (port 5671, TLS).
-3. **Render** — new Web Service, root directory `apps/core-api` (uses its `Dockerfile`). Set all the env vars below, generating fresh secrets for `JWT_SECRET`/`ENCRYPTION_KEY`/`INTERNAL_API_KEY` — don't reuse the dev placeholders. Also deploy `document-worker` as a Background Worker the same way (root directory `apps/document-worker`), pointed at the same CloudAMQP/Supabase Storage, with `CORE_API_URL` set to the core-api service's Render URL.
+2. **Google Cloud Pub/Sub** — create the `documents-received` topic and a `documents-received-push` push subscription pointed at document-worker's deployed URL (see `infrastructure/terraform/pubsub.tf`). No credentials to manage — core-api's Pub/Sub client uses Application Default Credentials automatically wherever it's hosted on GCP.
+3. **Render** — new Web Service, root directory `apps/core-api` (uses its `Dockerfile`). Set all the env vars below, generating fresh secrets for `JWT_SECRET`/`ENCRYPTION_KEY`/`INTERNAL_API_KEY` — don't reuse the dev placeholders. Also deploy `document-worker` as a Background Worker the same way (root directory `apps/document-worker`), pointed at the same Supabase Storage, with `CORE_API_URL` set to the core-api service's Render URL.
 4. **Vercel** — new project, root directory `apps/web`, env var `NEXT_PUBLIC_API_URL` pointing at the Render service (`https://<service>.onrender.com/api/v1`).
 
 Key gotchas hit while setting this up (see `.env.example` for the full annotated list):
@@ -126,7 +126,7 @@ Key gotchas hit while setting this up (see `.env.example` for the full annotated
 - Supabase's pooler caps free-tier projects at a small total connection count shared across every connected instance — `HIKARI_MAX_POOL_SIZE` (default 5) keeps one instance from starving the others out.
 - CORS: `CORS_ALLOWED_ORIGINS` must include the deployed frontend's exact origin, or requests fail silently in the browser with no server-side error to grep for.
 - In a Vercel monorepo, **Root Directory** must be set explicitly (`apps/web`) or the build silently fails to find the Next.js app.
-- `document-worker` needs `RABBITMQ_SSL_ENABLED=true` and `RABBITMQ_VIRTUAL_HOST` (your CloudAMQP vhost, not `/`) set explicitly — without them it silently never connects (0 consumers on the queue, uploads stay stuck in `PROCESSING` forever) rather than erroring loudly.
+- `document-worker`'s Pub/Sub push subscription needs IAM-authenticated invocation configured (a dedicated push service account with `roles/run.invoker` on the service) — without it, either the subscription can't call the endpoint at all, or (if left `--allow-unauthenticated`) anyone can.
 
 ## 🧪 Running Tests
 
@@ -156,7 +156,7 @@ No tests exist yet for the auth, OCR pipeline, or frontend code added since MVP.
 - **Multi-tenant architecture**, tenant isolation enforced at the query level (`TenantContext` + `tenant_id` on every record)
 - **Real JWT authentication** — register/login/change-password, BCrypt password hashing, per-tenant data isolation verified end-to-end
 - **Document upload** to S3-compatible storage (Supabase Storage in production, MinIO locally), with a full REST API (`/api/v1/documents`, `/api/v1/auth/*`, `/api/v1/tenant/*`)
-- **Async OCR pipeline**: upload → RabbitMQ → `document-worker` (real Tesseract OCR + `pdf2image` for PDFs, regex-based field extraction — no LLM configured) → REST callback → `ExtractedData` table → paginated `/extracted-data` page. This is what will feed the AI CFO.
+- **Async OCR pipeline**: upload → Pub/Sub → `document-worker` (real Tesseract OCR + `pdf2image` for PDFs, regex-based field extraction — no LLM configured) → REST callback → `ExtractedData` table → paginated `/extracted-data` page. This is what will feed the AI CFO.
 - **WhatsApp integration via Twilio** — inbound webhook (form-encoded, signature-verified) feeds attached receipts/invoices into the same upload pipeline; outbound replies sent via the Twilio Messages API; needs `TWILIO_*` env vars to actually send/receive
 - **Inbound email webhook** — scaffolded around SendGrid Inbound Parse's format; each tenant gets a derived `{tenantId}@{domain}` address (shown in Settings); inert until a domain with MX records pointed at a provider is configured
 - **Settings page** — appearance (light/dark, user-toggled), business name, change password, WhatsApp connect/disconnect, email address display
@@ -164,7 +164,7 @@ No tests exist yet for the auth, OCR pipeline, or frontend code added since MVP.
 - **Square integration** for POS/payment data collection — idempotent sync, cents→decimal conversion, tenant-isolated import, reconciliation tracking
 - **Full light/dark theme**, mobile-first responsive UI with a hamburger nav
 - **`run.sh`** for one-command local start/stop; Dockerfiles for `core-api` and `document-worker` for container deploys
-- Deployed and live (Render + Vercel + Supabase + CloudAMQP — see above)
+- Deployed and live (Render + Vercel + Supabase + Pub/Sub — see above)
 
 ### 🚧 Known Gaps
 
@@ -226,7 +226,7 @@ For Kenya market, implement **tokenized hub-and-spoke model**:
 
 1. **Modular Monolith** → Microservices later (avoid premature fragmentation)
 2. **Tenant Isolation** → Every record scoped to tenant_id
-3. **Event-Driven** → Async OCR processing via RabbitMQ (implemented)
+3. **Event-Driven** → Async OCR processing via Pub/Sub (implemented)
 4. **API-First** → REST APIs (OpenAPI contracts not yet generated)
 5. **Immutable Ledger** → Financial journal entries are append-only (module not yet built)
 
@@ -235,11 +235,11 @@ For Kenya market, implement **tokenized hub-and-spoke model**:
 | Layer | Technology |
 |-------|------------|
 | **Backend** | Java 21, Spring Boot 3.3, Spring Data JPA, Spring Security, Flyway |
-| **Worker** | Python 3.11, FastAPI, Tesseract OCR, pdf2image, aio-pika |
+| **Worker** | Python 3.11, FastAPI, Tesseract OCR, pdf2image |
 | **Frontend** | Next.js 14, React 18, TypeScript, Tailwind CSS |
 | **Database** | PostgreSQL (Supabase in production, local Docker for dev) |
 | **Object storage** | S3-compatible (Supabase Storage in production, MinIO for dev) |
-| **Queue** | RabbitMQ (CloudAMQP in production, local Docker for dev) |
+| **Queue** | Google Cloud Pub/Sub (push subscription; local emulator + forwarder for dev) |
 | **Cache** | Redis (provisioned, not yet used by application code) |
 | **Auth** | JWT (jjwt), BCrypt |
 | **Hosting** | Render (core-api, document-worker), Vercel (web) |
@@ -253,12 +253,13 @@ For Kenya market, implement **tokenized hub-and-spoke model**:
 docker ps  # Should list running containers
 ```
 
-### RabbitMQ connection refused (local dev)
+### document-worker never receives pushed events (local dev)
 
 ```bash
-docker compose ps rabbitmq
+docker compose ps pubsub-emulator pubsub-forwarder
+docker compose logs pubsub-forwarder
 ```
-Management UI: http://localhost:15672 (credentials in `.env`)
+The emulator only supports pull subscriptions, so `pubsub-forwarder` bridges it to document-worker's push endpoint — if it's not running/healthy, nothing gets forwarded.
 
 ### MinIO bucket not found (local dev)
 

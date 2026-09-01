@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
 # Start/stop everything needed to run Akihlee locally: infra (Postgres,
-# Redis, RabbitMQ, MinIO via Docker Compose), the Core API (Java/Spring
-# Boot), and the web frontend (Next.js).
+# Redis, the Pub/Sub emulator+forwarder, MinIO via Docker Compose), the
+# Core API (Java/Spring Boot), and the web frontend (Next.js).
 #
 # Usage:
 #   ./run.sh start
@@ -44,9 +44,10 @@ wait_for_port() {
 start() {
   mkdir -p "$RUN_DIR"
 
-  # 1. Infra: Postgres, Redis, RabbitMQ, MinIO (docker-compose.yml only
-  #    defines these — the app processes themselves run natively below).
-  echo "Starting infrastructure (Postgres, Redis, RabbitMQ, MinIO)..."
+  # 1. Infra: Postgres, Redis, the Pub/Sub emulator+forwarder, MinIO
+  #    (docker-compose.yml only defines these — the app processes
+  #    themselves run natively below).
+  echo "Starting infrastructure (Postgres, Redis, Pub/Sub emulator, MinIO)..."
   (cd "$SCRIPT_DIR/infrastructure/docker" && docker compose up -d)
 
   # Core API runs Flyway migrations on startup and will fail fast if

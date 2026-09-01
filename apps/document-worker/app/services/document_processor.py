@@ -1,14 +1,11 @@
-"""RabbitMQ queue consumer for document processing events."""
+"""Document processing: downloads from S3, runs OCR/vision extraction, and reports results back to Core API."""
 
-import json
 import logging
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-import aio_pika
 import boto3
 import httpx
-from aio_pika.abc import AbstractIncomingMessage
 from pdf2image import convert_from_path
 
 from app.config import settings
@@ -19,13 +16,13 @@ from app.services.vision_extraction_service import VisionExtractionService
 logger = logging.getLogger(__name__)
 
 
-class QueueConsumer:
+class DocumentProcessor:
     """
-    Consumes document upload events from RabbitMQ and processes them.
+    Processes document upload events pushed from Pub/Sub.
 
     Event flow:
-    1. Core API uploads document -> publishes 'documents.received' event
-    2. Worker consumes event -> downloads from S3/MinIO -> runs OCR
+    1. Core API uploads document -> publishes to the 'documents-received' Pub/Sub topic
+    2. Pub/Sub pushes the event to this worker -> downloads from S3/MinIO -> runs OCR
     3. Worker POSTs extracted fields back to Core API's internal callback,
        which updates the document's status and persists ExtractedData.
     """
@@ -33,9 +30,6 @@ class QueueConsumer:
     def __init__(self, ocr_service: OCRService, vision_service: VisionExtractionService | None = None):
         self.ocr_service = ocr_service
         self.vision_service = vision_service
-        self.connection: aio_pika.Connection | None = None
-        self.channel: aio_pika.Channel | None = None
-        self.queue: aio_pika.Queue | None = None
         self.s3_client = boto3.client(
             "s3",
             endpoint_url=settings.S3_ENDPOINT,
@@ -44,46 +38,17 @@ class QueueConsumer:
         )
         self.http_client = httpx.AsyncClient(timeout=10.0)
 
-    async def start(self):
-        """Start consuming messages from RabbitMQ."""
-        try:
-            self.connection = await aio_pika.connect_robust(
-                host=settings.RABBITMQ_HOST,
-                port=settings.RABBITMQ_PORT,
-                login=settings.RABBITMQ_USERNAME,
-                password=settings.RABBITMQ_PASSWORD,
-                virtualhost=settings.RABBITMQ_VIRTUAL_HOST,
-                ssl=settings.RABBITMQ_SSL_ENABLED,
-            )
-
-            self.channel = await self.connection.channel()
-            await self.channel.set_qos(prefetch_count=1)  # Process one message at a time
-
-            self.queue = await self.channel.declare_queue(
-                settings.RABBITMQ_QUEUE_DOCUMENTS, durable=True
-            )
-
-            await self.queue.consume(self.process_message)
-            logger.info(f"Started consuming from queue: {settings.RABBITMQ_QUEUE_DOCUMENTS}")
-
-        except Exception as e:
-            logger.error(f"Failed to start queue consumer: {e}")
-            raise
-
-    async def stop(self):
-        """Stop consuming and close connections."""
+    async def aclose(self):
+        """Close shared clients on shutdown."""
         await self.http_client.aclose()
         if self.vision_service:
             await self.vision_service.aclose()
-        if self.connection:
-            await self.connection.close()
-            logger.info("Queue consumer stopped")
 
-    async def process_message(self, message: AbstractIncomingMessage):
+    async def process_event(self, event: dict) -> None:
         """
         Process a document upload event.
 
-        Expected message format:
+        Expected event format:
         {
             "document_id": "uuid",
             "tenant_id": "uuid",
@@ -91,45 +56,47 @@ class QueueConsumer:
             "filename": "receipt.pdf",
             "content_type": "application/pdf"
         }
+
+        Deliberately never raises — the push endpoint acks (204) regardless
+        of outcome, matching this service's prior RabbitMQ behavior of one
+        attempt then a best-effort REVIEW_REQUIRED, rather than relying on
+        Pub/Sub redelivery for transient failures.
         """
-        async with message.process():
-            event = json.loads(message.body.decode())
-            document_id = event.get("document_id")
-            logger.info(f"Processing document: {document_id}")
+        document_id = event.get("document_id")
+        logger.info(f"Processing document: {document_id}")
 
+        try:
+            with TemporaryDirectory() as tmpdir:
+                image_paths = self._download_and_prepare_images(event, Path(tmpdir))
+                result = await self._extract(image_paths)
+
+            status = (
+                "EXTRACTED"
+                if result["confidence"] >= settings.OCR_CONFIDENCE_THRESHOLD
+                else "REVIEW_REQUIRED"
+            )
+            await self._send_callback(document_id, result, status)
+            logger.info(
+                f"Processed document {document_id}: {status} "
+                f"(confidence={result['confidence']}, method={result.get('extraction_method')})"
+            )
+
+        except Exception as e:
+            logger.error(f"Error processing document {document_id}: {e}")
+            # Best-effort: let the user see it needs manual review rather
+            # than leaving it stuck at PROCESSING forever.
             try:
-                with TemporaryDirectory() as tmpdir:
-                    image_paths = self._download_and_prepare_images(event, Path(tmpdir))
-                    result = await self._extract(image_paths)
-
-                status = (
-                    "EXTRACTED"
-                    if result["confidence"] >= settings.OCR_CONFIDENCE_THRESHOLD
-                    else "REVIEW_REQUIRED"
+                await self._send_callback(
+                    document_id,
+                    {
+                        "merchant": None, "total_amount": None, "currency": "KES",
+                        "date": None, "tax_amount": None, "line_items": [],
+                        "raw_text": "", "confidence": 0.0,
+                    },
+                    "REVIEW_REQUIRED",
                 )
-                await self._send_callback(document_id, result, status)
-                logger.info(
-                    f"Processed document {document_id}: {status} "
-                    f"(confidence={result['confidence']}, method={result.get('extraction_method')})"
-                )
-
-            except Exception as e:
-                logger.error(f"Error processing document {document_id}: {e}")
-                # Best-effort: let the user see it needs manual review rather
-                # than leaving it stuck at PROCESSING forever.
-                try:
-                    await self._send_callback(
-                        document_id,
-                        {
-                            "merchant": None, "total_amount": None, "currency": "KES",
-                            "date": None, "tax_amount": None, "line_items": [],
-                            "raw_text": "", "confidence": 0.0,
-                        },
-                        "REVIEW_REQUIRED",
-                    )
-                except Exception:
-                    logger.error(f"Also failed to report failure for document {document_id}")
-                raise
+            except Exception:
+                logger.error(f"Also failed to report failure for document {document_id}")
 
     async def _extract(self, image_paths: list[Path]) -> dict:
         """Vision LLM primary (if configured), regex/Tesseract fallback otherwise

@@ -2,7 +2,7 @@
 
 Neither VisionExtractionService (an LLM) nor OCRService (regex/Tesseract)
 gets the final say on data quality. This module runs on the output of
-*either* engine — see QueueConsumer._extract, the one call site — and:
+*either* engine — see DocumentProcessor._extract, the one call site — and:
 
 1. Normalizes dates/currency-shaped numbers defensively, in case a model
    or a loosely-matched regex emitted something slightly off-schema.
@@ -14,7 +14,7 @@ gets the final say on data quality. This module runs on the output of
    any self-reported confidence score, so it overrides it.
 
 Deliberately standalone (imports nothing from ocr_service.py or
-vision_extraction_service.py) so QueueConsumer can import all three
+vision_extraction_service.py) so DocumentProcessor can import all three
 without any risk of a circular import.
 """
 
@@ -32,7 +32,7 @@ _RECONCILIATION_TOLERANCE = 0.05
 # Confidence is capped (never raised) to this when the ledger math doesn't
 # add up, which is safely below the default OCR_CONFIDENCE_THRESHOLD (0.7)
 # — that's what actually routes the document to REVIEW_REQUIRED downstream
-# in QueueConsumer.process_message, so no separate status field is needed.
+# in DocumentProcessor.process_event, so no separate status field is needed.
 _FAILED_RECONCILIATION_CONFIDENCE_CAP = 0.6
 
 # Defensive re-normalization only — both engines should already emit
@@ -144,7 +144,7 @@ def _reconcile_balances(
 
 def _validate_and_reconcile_statement(data: dict[str, Any]) -> dict[str, Any]:
     """Runs on the output of either extraction engine before it's returned
-    to QueueConsumer. Always normalizes dates/numbers; only attempts ledger
+    to DocumentProcessor. Always normalizes dates/numbers; only attempts ledger
     reconciliation for BANK_STATEMENT documents.
     """
     data = dict(data)

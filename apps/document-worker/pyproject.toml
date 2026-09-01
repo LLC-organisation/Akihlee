@@ -10,7 +10,6 @@ dependencies = [
     "pydantic-settings>=2.3.0",
 
     # Queue/messaging
-    "aio-pika>=9.4.0",  # RabbitMQ async client
 
     # OCR and document processing
     "pytesseract>=0.3.10",

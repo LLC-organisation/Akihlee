@@ -9,9 +9,13 @@ resource "google_cloud_run_v2_service_iam_member" "core_api_public" {
   member   = "allUsers"
 }
 
-resource "google_cloud_run_v2_service_iam_member" "document_worker_public" {
+
+# document-worker is no longer public — it only receives authenticated
+# push deliveries from the documents-received-push subscription, invoked
+# as the pubsub_push_invoker service account (see pubsub.tf).
+resource "google_cloud_run_v2_service_iam_member" "document_worker_pubsub_invoker" {
   location = var.region
   name     = "document-worker"
   role     = "roles/run.invoker"
-  member   = "allUsers"
+  member   = "serviceAccount:${google_service_account.pubsub_push_invoker.email}"
 }

@@ -16,19 +16,6 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8080"]
 
-    # RabbitMQ (defaults for local dev - override in .env). Managed providers
-    # like CloudAMQP put each instance on its own vhost (not "/") and require
-    # TLS on port 5671 — mirrors core-api's spring.rabbitmq.ssl.enabled/
-    # virtual-host, which needed the same fix for the same reason.
-    RABBITMQ_HOST: str = "localhost"
-    RABBITMQ_PORT: int = 5672
-    RABBITMQ_USERNAME: str = "akihlee"
-    RABBITMQ_PASSWORD: str = "dev_rabbitmq_password"
-    RABBITMQ_VIRTUAL_HOST: str = "/"
-    RABBITMQ_SSL_ENABLED: bool = False
-    RABBITMQ_QUEUE_DOCUMENTS: str = "documents.received"
-    RABBITMQ_QUEUE_RESULTS: str = "documents.extracted"
-
     # S3/MinIO
     S3_ENDPOINT: str = "http://localhost:9000"
     S3_ACCESS_KEY: str = "akihlee"

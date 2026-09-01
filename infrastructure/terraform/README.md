@@ -58,8 +58,9 @@ terraform init
 terraform import google_artifact_registry_repository.cloud_run_source_deploy \
   projects/hallowed-index-504918-b4/locations/europe-west1/repositories/cloud-run-source-deploy
 
-for s in JWT_SECRET DATABASE_PASSWORD RABBITMQ_PASSWORD S3_SECRET_KEY \
+for s in JWT_SECRET DATABASE_PASSWORD S3_SECRET_KEY \
          INTERNAL_API_KEY SQUARE_OAUTH_CLIENT_SECRET SQUARE_ACCESS_TOKEN \
+         QUICKBOOKS_OAUTH_CLIENT_SECRET QUICKBOOKS_TOKEN_ENCRYPTION_KEY \
          AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
   terraform import "google_secret_manager_secret.this[\"$s\"]" \
     "projects/hallowed-index-504918-b4/secrets/$s"
@@ -67,8 +68,16 @@ done
 
 terraform import google_cloud_run_v2_service_iam_member.core_api_public \
   "projects/hallowed-index-504918-b4/locations/europe-west1/services/akihlee-api roles/run.invoker allUsers"
-terraform import google_cloud_run_v2_service_iam_member.document_worker_public \
-  "projects/hallowed-index-504918-b4/locations/europe-west1/services/document-worker roles/run.invoker allUsers"
+
+# document-worker is no longer public (see pubsub.tf) — only import
+# document_worker_pubsub_invoker below once the Pub/Sub migration's manual
+# gcloud setup has actually been run (topic/subscription/push-invoker SA
+# don't exist yet otherwise, and there's nothing to import). pubsub.tf's
+# other resources (topic, subscription, service account) are brand new
+# too — they have no import command here; either `terraform apply` them
+# fresh at that point, or import each individually first.
+terraform import google_cloud_run_v2_service_iam_member.document_worker_pubsub_invoker \
+  "projects/hallowed-index-504918-b4/locations/europe-west1/services/document-worker roles/run.invoker serviceAccount:pubsub-push-invoker@hallowed-index-504918-b4.iam.gserviceaccount.com"
 
 # Use the trigger IDs from `gcloud builds triggers list` above, not the names.
 terraform import google_cloudbuild_trigger.core_api "projects/hallowed-index-504918-b4/locations/europe-west1/triggers/<core-api-trigger-id>"

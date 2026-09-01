@@ -35,23 +35,39 @@ services:
       timeout: 3s
       retries: 5
 
-  # RabbitMQ - Message Queue for async processing
-  rabbitmq:
-    image: rabbitmq:3.13-management-alpine
-    container_name: akihlee-rabbitmq
-    environment:
-      RABBITMQ_DEFAULT_USER: akihlee
-      RABBITMQ_DEFAULT_PASS: dev_rabbitmq_password
+  # Pub/Sub emulator - local stand-in for GCP Pub/Sub. core-api (running
+  # natively on the host, see below) points its Publisher at this via
+  # PUBSUB_EMULATOR_HOST in its own .env. Pull-only — see pubsub-forwarder
+  # for why push delivery to document-worker needs a shim locally.
+  pubsub-emulator:
+    image: gcr.io/google.com/cloudsdktool/cloud-sdk:emulators
+    container_name: akihlee-pubsub-emulator
+    command: gcloud beta emulators pubsub start --host-port=0.0.0.0:8085 --project=akihlee-dev-local
     ports:
-      - "5672:5672"   # AMQP port
-      - "15672:15672" # Management UI
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
+      - "8085:8085"
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/8085"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # Forwards documents-received events from the emulator to document-worker
+  # over HTTP, simulating Pub/Sub push delivery — see pubsub-forwarder/forwarder.py.
+  # Never runs in production; real Pub/Sub pushes to document-worker directly.
+  pubsub-forwarder:
+    build:
+      context: ./pubsub-forwarder
+    container_name: akihlee-pubsub-forwarder
+    environment:
+      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
+      PUBSUB_PROJECT_ID: akihlee-dev-local
+      PUSH_ENDPOINT: http://document-worker:8000/internal/pubsub/documents-received
+    depends_on:
+      pubsub-emulator:
+        condition: service_healthy
+      document-worker:
+        condition: service_started
+    restart: unless-stopped
 
   # MinIO - S3-compatible object storage
   minio:
@@ -80,10 +96,6 @@ services:
       context: ../../apps/document-worker
     container_name: akihlee-document-worker
     environment:
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
-      RABBITMQ_USERNAME: akihlee
-      RABBITMQ_PASSWORD: dev_rabbitmq_password
       S3_ENDPOINT: http://minio:9000
       S3_ACCESS_KEY: akihlee
       S3_SECRET_KEY: dev_minio_password_min_8_chars
@@ -94,8 +106,6 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
-      rabbitmq:
-        condition: service_healthy
       minio:
         condition: service_healthy
     restart: unless-stopped
@@ -120,8 +130,6 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
-    driver: local
-  rabbitmq_data:
     driver: local
   minio_data:
     driver: local
