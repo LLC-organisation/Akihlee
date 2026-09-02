@@ -15,6 +15,14 @@ dependencies = [
     "pytesseract>=0.3.10",
     "pdf2image>=1.17.0",
     "Pillow>=10.4.0",
+    "pymupdf>=1.24.0",
+
+    # PII redaction (see app/services/pii_redactor.py) — presidio-analyzer
+    # alone is enough here since redaction itself is hand-rolled via
+    # PyMuPDF; presidio-anonymizer's string-anonymization isn't used.
+    "presidio-analyzer>=2.2.354",
+    "spacy>=3.7.0",
+    "en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl",
 
     # AWS SDK for S3 and Bedrock (Converse API requires boto3>=1.34.116)
     "boto3>=1.34.130",

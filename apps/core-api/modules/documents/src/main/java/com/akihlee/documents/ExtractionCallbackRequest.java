@@ -2,6 +2,7 @@ package com.akihlee.documents;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Body posted by document-worker once OCR extraction finishes for a document.
@@ -18,6 +19,7 @@ public record ExtractionCallbackRequest(
         String rawText,
         double confidence,
         String extractionMethod, // "vision" (Claude on Bedrock) | "regex" (Tesseract fallback) | null
+        Map<String, String> piiTokenMap, // {token: realValue}, e.g. {"[CLIENT_NAME_1]": "GEORGE AKAI"} — empty/null if the source wasn't a PDF or nothing was redacted
         String status // "EXTRACTED" or "REVIEW_REQUIRED"
 ) {
 }

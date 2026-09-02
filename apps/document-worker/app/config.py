@@ -53,6 +53,13 @@ class Settings(BaseSettings):
     CORE_API_URL: str = "http://localhost:8080"
     INTERNAL_API_KEY: str = "dev_internal_worker_key_change_in_production"
 
+    # PII redaction (see app/services/pii_redactor.py) — runs on every PDF
+    # before OCR/vision extraction, so Bedrock/Claude never sees an account
+    # holder's name, address, SSN, or account number. A kill switch in case
+    # the spaCy/Presidio pipeline misbehaves in production; extraction
+    # falls back to running on the original file when disabled.
+    PII_REDACTION_ENABLED: bool = True
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

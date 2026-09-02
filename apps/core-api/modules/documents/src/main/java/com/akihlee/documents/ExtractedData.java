@@ -62,6 +62,16 @@ public class ExtractedData {
     @Column(name = "extraction_method")
     private String extractionMethod;
 
+    // {token: realValue} for any PII document-worker redacted before this
+    // document ever reached the vision model — e.g. {"[CLIENT_NAME_1]":
+    // "GEORGE AKAI"}. Stored so PiiRehydrationService can restore real
+    // values in API responses; the redaction protects the AI vendor from
+    // seeing PII, not the tenant's own users from seeing their own data,
+    // so merchantName/rawText/line item text stay tokenized at rest here
+    // and only get rehydrated at the point a response is built.
+    @Column(name = "pii_token_map_json", columnDefinition = "TEXT")
+    private String piiTokenMapJson;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -174,6 +184,14 @@ public class ExtractedData {
 
     public void setExtractionMethod(String extractionMethod) {
         this.extractionMethod = extractionMethod;
+    }
+
+    public String getPiiTokenMapJson() {
+        return piiTokenMapJson;
+    }
+
+    public void setPiiTokenMapJson(String piiTokenMapJson) {
+        this.piiTokenMapJson = piiTokenMapJson;
     }
 
     public enum DocumentType {

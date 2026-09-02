@@ -12,6 +12,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -25,24 +26,31 @@ public class BankTransactionController {
 
     private final BankTransactionRepository bankTransactionRepository;
     private final ExtractedDataRepository extractedDataRepository;
+    private final PiiRehydrationService piiRehydrationService;
     private final AuditLogService auditLogService;
     private final UserRepository userRepository;
 
     public BankTransactionController(
             BankTransactionRepository bankTransactionRepository,
             ExtractedDataRepository extractedDataRepository,
+            PiiRehydrationService piiRehydrationService,
             AuditLogService auditLogService,
             UserRepository userRepository) {
         this.bankTransactionRepository = bankTransactionRepository;
         this.extractedDataRepository = extractedDataRepository;
+        this.piiRehydrationService = piiRehydrationService;
         this.auditLogService = auditLogService;
         this.userRepository = userRepository;
     }
 
     @GetMapping("/api/v1/extracted-data/{extractedDataId}/bank-transactions")
     public List<BankTransaction> list(@PathVariable UUID extractedDataId) {
-        requireOwnedExtractedData(extractedDataId);
-        return bankTransactionRepository.findByExtractedDataIdOrderByTransactionDateAsc(extractedDataId);
+        ExtractedData data = requireOwnedExtractedData(extractedDataId);
+        Map<String, String> tokenMap = piiRehydrationService.parseTokenMap(data);
+        List<BankTransaction> transactions =
+                bankTransactionRepository.findByExtractedDataIdOrderByTransactionDateAsc(extractedDataId);
+        transactions.forEach(txn -> piiRehydrationService.rehydrate(txn, tokenMap));
+        return transactions;
     }
 
     @PostMapping("/api/v1/extracted-data/{extractedDataId}/bank-transactions")
@@ -104,9 +112,9 @@ public class BankTransactionController {
                 AuditAction.BANK_TRANSACTION_EDITED, "BANK_TRANSACTION", id.toString(), "deleted");
     }
 
-    private void requireOwnedExtractedData(UUID extractedDataId) {
+    private ExtractedData requireOwnedExtractedData(UUID extractedDataId) {
         UUID tenantId = TenantContext.getCurrentTenantId();
-        extractedDataRepository.findById(extractedDataId)
+        return extractedDataRepository.findById(extractedDataId)
                 .filter(d -> d.getTenantId().equals(tenantId))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Extracted data not found"));
     }

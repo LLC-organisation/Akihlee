@@ -30,6 +30,7 @@ public class ExtractedDataController {
     private final DocumentRepository documentRepository;
     private final BankTransactionRepository bankTransactionRepository;
     private final VendorRuleRepository vendorRuleRepository;
+    private final PiiRehydrationService piiRehydrationService;
     private final ObjectMapper objectMapper;
     private final String internalApiKey;
     private final AuditLogService auditLogService;
@@ -41,6 +42,7 @@ public class ExtractedDataController {
             DocumentRepository documentRepository,
             BankTransactionRepository bankTransactionRepository,
             VendorRuleRepository vendorRuleRepository,
+            PiiRehydrationService piiRehydrationService,
             ObjectMapper objectMapper,
             @Value("${worker.api-key}") String internalApiKey,
             AuditLogService auditLogService,
@@ -50,6 +52,7 @@ public class ExtractedDataController {
         this.documentRepository = documentRepository;
         this.bankTransactionRepository = bankTransactionRepository;
         this.vendorRuleRepository = vendorRuleRepository;
+        this.piiRehydrationService = piiRehydrationService;
         this.objectMapper = objectMapper;
         this.internalApiKey = internalApiKey;
         this.auditLogService = auditLogService;
@@ -88,6 +91,9 @@ public class ExtractedDataController {
         data.setRawText(request.rawText());
         data.setConfidence(request.confidence());
         data.setExtractionMethod(request.extractionMethod());
+        if (request.piiTokenMap() != null && !request.piiTokenMap().isEmpty()) {
+            data.setPiiTokenMapJson(toJson(request.piiTokenMap()));
+        }
         extractedDataRepository.save(data);
 
         // Replace rather than merge: the worker only ever sends a full,
@@ -141,7 +147,11 @@ public class ExtractedDataController {
     public Page<ExtractedData> list(
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         UUID tenantId = TenantContext.getCurrentTenantId();
-        return extractedDataRepository.findByTenantId(tenantId, pageable);
+        return extractedDataRepository.findByTenantId(tenantId, pageable)
+                .map(data -> {
+                    piiRehydrationService.rehydrate(data);
+                    return data;
+                });
     }
 
     /**
@@ -175,6 +185,9 @@ public class ExtractedDataController {
         auditLogService.log(tenantId, currentUserId(), currentUserEmail(),
                 AuditAction.EXTRACTED_DATA_EDITED, "EXTRACTED_DATA", id.toString(), toJson(request));
 
+        // Rehydrated only after save() has already returned — see
+        // PiiRehydrationService's own note on why order matters here.
+        piiRehydrationService.rehydrate(data);
         return data;
     }
 
@@ -186,9 +199,11 @@ public class ExtractedDataController {
     @GetMapping("/api/v1/documents/{documentId}/extracted-data")
     public ExtractedData getByDocument(@PathVariable UUID documentId) {
         UUID tenantId = TenantContext.getCurrentTenantId();
-        return extractedDataRepository.findByDocumentId(documentId)
+        ExtractedData data = extractedDataRepository.findByDocumentId(documentId)
                 .filter(d -> d.getTenantId().equals(tenantId))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Extracted data not found"));
+        piiRehydrationService.rehydrate(data);
+        return data;
     }
 
     private UUID currentUserId() {
