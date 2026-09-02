@@ -188,14 +188,28 @@ opposite of Square, where the OAuth host itself changes by environment):
 
 ## Security Considerations
 
-1. **Token Storage**
-   - Stored on `Tenant` (`quickbooks_access_token`/`quickbooks_refresh_token`, both `TEXT` columns),
-     same pattern as Square's tokens — not encrypted at the column level, matching this repo's existing
-     convention for Square; use a secrets manager / column-level encryption before handling real
-     customer QuickBooks data in production if that convention hasn't been revisited by then.
+1. **Token Storage (encrypted at rest)**
+   - `quickbooks_access_token`/`quickbooks_refresh_token` on `Tenant` are AES-256-GCM encrypted at the
+     column level via `AesGcmStringConverter` (`@Convert` on both fields) — required for Intuit's App
+     Store security review, which mandates AES/3DES encryption of the refresh token. Unlike Square's
+     equivalent tokens (still plaintext `TEXT`, out of scope for this pass — see Square's own docs if
+     that integration is ever put through the same review).
+   - The AES key (`QUICKBOOKS_TOKEN_ENCRYPTION_KEY`, base64) lives in GCP Secret Manager alongside the
+     app's other secrets (`infrastructure/terraform/secrets.tf`), wired into Cloud Run the same way as
+     `JWT_SECRET`. Generate one with `openssl rand -base64 32`; never commit a real value.
+   - Migration `V18__encrypt_quickbooks_tokens.sql` cleared any tokens stored under the old plaintext
+     scheme when this shipped (they can't be read back through the new converter) — any tenant connected
+     before that migration needs to reconnect once via "Connect with QuickBooks".
+   - `quickbooksRealmId` is left unencrypted — it's Intuit's QuickBooks company ID, not a secret.
 
 2. **Tenant Isolation**
    - Every query enforces `tenant_id` filter, same as Square.
+
+3. **No sensitive data in logs**
+   - Intuit's raw HTTP response bodies (token endpoint, revoke endpoint, Query API) are deliberately
+     excluded from log lines and exception messages (`QuickBooksOAuthService`, `QuickBooksApiClientImpl`)
+     — those bodies can carry token or financial data, and Intuit's review explicitly prohibits logging
+     QuickBooks data or credentials. Only status codes are logged.
 
 ## References
 

@@ -140,7 +140,9 @@ public class QuickBooksOAuthService {
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() >= 300) {
-                logger.warn("QuickBooks token revoke returned {}: {}", response.statusCode(), response.body());
+                // Body deliberately omitted — Intuit's error payloads can echo
+                // back request/token detail, which must never land in logs.
+                logger.warn("QuickBooks token revoke returned {}", response.statusCode());
             }
         } catch (Exception e) {
             logger.warn("Failed to revoke QuickBooks token (local disconnect still proceeds): {}", e.getMessage());
@@ -158,7 +160,11 @@ public class QuickBooksOAuthService {
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() >= 300) {
-                throw new RuntimeException("QuickBooks OAuth token request failed: " + response.statusCode() + " " + response.body());
+                // Body deliberately omitted from the exception message — it
+                // can echo back token/request detail, and this message may
+                // end up in application logs or (via GlobalExceptionHandler)
+                // surfaced to a caller.
+                throw new RuntimeException("QuickBooks OAuth token request failed: " + response.statusCode());
             }
             return objectMapper.readValue(response.body(), QuickBooksTokenApiResponse.class);
         } catch (RuntimeException e) {

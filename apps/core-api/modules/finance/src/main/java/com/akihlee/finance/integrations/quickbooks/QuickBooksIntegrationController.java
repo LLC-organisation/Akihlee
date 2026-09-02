@@ -100,7 +100,12 @@ public class QuickBooksIntegrationController {
             @RequestParam(required = false) String state,
             @RequestParam(required = false) String realmId,
             @RequestParam(required = false) String error) {
-        if (error != null || code == null || state == null || realmId == null) {
+        // realmId is Intuit's QuickBooks company ID, always a plain numeric
+        // string. It's later concatenated unescaped into the Query API's
+        // URL path (QuickBooksApiClientImpl) — validating the shape here
+        // stops a tampered callback param from injecting a different path
+        // into that request.
+        if (error != null || code == null || state == null || realmId == null || !realmId.matches("\\d+")) {
             return redirectToIntegrations("error");
         }
 

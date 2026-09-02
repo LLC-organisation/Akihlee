@@ -106,3 +106,9 @@ infrastructure/terraform/*.tfstate
 infrastructure/terraform/*.tfstate.*
 infrastructure/terraform/terraform.tfvars
 infrastructure/terraform/*.tfplan
+
+# Intuit's own QuickBooks OAuth quickstart sample scaffold — a local
+# reference/scratch tool, not part of the shipped app. Stores tokens in a
+# plaintext local file, which is fine for a throwaway sandbox tool but
+# should never be committed.
+apps/quickbooks-oauth-quickstart/

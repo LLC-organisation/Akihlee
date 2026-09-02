@@ -55,10 +55,16 @@ public class Tenant {
     // QuickBooksOAuthService) — null means "not connected." Unlike Square,
     // there's no operator-fallback token: QuickBooks is OAuth-only, so every
     // tenant must connect their own company.
+    //
+    // @Convert'd (unlike the Square tokens above) — Intuit's App Store
+    // security review requires QuickBooks access/refresh tokens encrypted
+    // at rest; see AesGcmStringConverter.
     @Column(name = "quickbooks_access_token", columnDefinition = "TEXT")
+    @Convert(converter = AesGcmStringConverter.class)
     private String quickbooksAccessToken;
 
     @Column(name = "quickbooks_refresh_token", columnDefinition = "TEXT")
+    @Convert(converter = AesGcmStringConverter.class)
     private String quickbooksRefreshToken;
 
     @Column(name = "quickbooks_realm_id")

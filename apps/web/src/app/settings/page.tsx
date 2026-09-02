@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { getAuthToken, tenantApi, authApi, Tenant } from '@/lib/api-client';
 import { AppSidebar } from '@/components/AppSidebar';
 import { getStoredTheme, setTheme, Theme } from '@/lib/theme';
@@ -187,6 +188,20 @@ function ChangePasswordSection() {
   );
 }
 
+function LegalSection() {
+  return (
+    <SectionCard title="Legal">
+      <Link
+        href="/privacy"
+        target="_blank"
+        className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+      >
+        Privacy Policy
+      </Link>
+    </SectionCard>
+  );
+}
+
 export default function SettingsPage() {
   const router = useRouter();
   const [checkedAuth, setCheckedAuth] = useState(false);
@@ -242,6 +257,7 @@ export default function SettingsPage() {
               <AppearanceSection />
               <ProfileSection tenant={tenant} onUpdated={setTenant} />
               <ChangePasswordSection />
+              <LegalSection />
             </div>
           )}
         </main>

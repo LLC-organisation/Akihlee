@@ -87,7 +87,10 @@ public class QuickBooksApiClientImpl implements QuickBooksApiClient {
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() >= 300) {
-                throw new RuntimeException("QuickBooks API error: " + response.statusCode() + " " + response.body());
+                // Body deliberately omitted — a QuickBooks Query API error
+                // response can include financial data, which must never
+                // land in application logs or a client-facing error.
+                throw new RuntimeException("QuickBooks API error: " + response.statusCode());
             }
             JsonNode root = objectMapper.readTree(response.body());
             return root.path("QueryResponse").path("Purchase");
