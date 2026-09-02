@@ -65,6 +65,32 @@ _STREET_ADDRESS_PATTERN = re.compile(
 # essentially never this short.
 _MIN_LOCATION_LENGTH = 5
 
+# A whole header line that's plausibly nothing but a personal name (2-4
+# words/tokens, alphabetic only, comma- or space-separated) — a
+# deterministic complement to spaCy's NER, same reasoning as
+# _STREET_ADDRESS_PATTERN above. Needed because en_core_web_sm empirically
+# does NOT reliably span a full "FIRST MIDDLE LAST" name printed the way
+# statement headers actually print it: it silently truncates ("JANE MARIE
+# DOE" -> only "JANE MARIE", dropping the surname entirely), mis-tags a
+# hyphenated first name as a too-short LOCATION instead of PERSON
+# ("ANNA-LISE VANDERBERG" -> only "ANNA" as LOCATION, which the length
+# floor above then drops too, leaving the whole name unredacted), or
+# misses a last-name-first line entirely ("DOE, JANE MARIE" -> only "JANE
+# MARIE", "DOE" left untouched). Each of these leaves part or all of the
+# account holder's actual legal name in the redacted output, in direct
+# contradiction of this module's whole purpose — so once NER signals ANY
+# PERSON/LOCATION presence on a line this shaped (see _redact_header), the
+# entire line is redacted rather than trusting NER's own span boundary.
+_BARE_NAME_LINE_PATTERN = re.compile(r"^[A-Za-z][A-Za-z'\-]*(?:[,\s]+[A-Za-z][A-Za-z'\-]*){1,3}$")
+# Header lines that are plausibly name-shaped but aren't a person's name —
+# excluded so the fallback above doesn't over-redact ordinary institution/
+# product/boilerplate lines that happen to be 2-4 alphabetic words.
+_NAME_LINE_EXCLUDE_KEYWORDS = re.compile(
+    r"\b(bank|na|checking|savings|summary|statement|account|street|st|avenue|ave|road|rd|"
+    r"boulevard|blvd|drive|dr|lane|ln|way|court|ct|place|pl|center|service|page|member|fdic)\b",
+    re.IGNORECASE,
+)
+
 _TOKEN_LABELS = {
     "PERSON": "CLIENT_NAME",
     "LOCATION": "ADDRESS",
@@ -148,7 +174,23 @@ def _redact_header(page: fitz.Page, assigner: _TokenAssigner) -> None:
         line = line.strip()
         if not line:
             continue
-        for result in analyzer.analyze(text=line, entities=["PERSON", "LOCATION"], language="en"):
+        line_entities = list(analyzer.analyze(text=line, entities=["PERSON", "LOCATION"], language="en"))
+
+        # Whole-line name fallback takes priority over the individual NER
+        # spans below — see _BARE_NAME_LINE_PATTERN. Redacting only NER's
+        # own (possibly truncated or mistyped) span here would risk
+        # leaving part of the actual name in the output, which is exactly
+        # the failure this exists to close, so this `continue`s past the
+        # granular per-entity loop for the line rather than doing both.
+        if (
+            line_entities
+            and _BARE_NAME_LINE_PATTERN.match(line)
+            and not _NAME_LINE_EXCLUDE_KEYWORDS.search(line)
+        ):
+            _redact_matches(page, line, "PERSON", assigner, clip=header_rect)
+            continue
+
+        for result in line_entities:
             entity_text = line[result.start:result.end].strip()
             if not entity_text:
                 continue

@@ -87,6 +87,59 @@ class TestHeaderRedaction:
         assert "JPMorgan Chase Bank" in _extract_all_text(output_path)
 
 
+def _build_statement_with_name(path: str, name_line: str) -> None:
+    """Same realistic header shape as _build_statement_pdf (bank letterhead
+    + return address, then the account holder's own name/address block),
+    parametrized on the name line — used to exercise name formats
+    en_core_web_sm's NER doesn't span reliably (see _BARE_NAME_LINE_PATTERN
+    in pii_redactor.py)."""
+    doc = fitz.open()
+    page = doc.new_page(width=612, height=792)
+    header_lines = [
+        "JPMorgan Chase Bank, N.A.",
+        "P O Box 182051",
+        "Columbus, OH 43218-2051",
+        name_line,
+        "4521 Willowbrook Lane",
+        "Chico, CA 95926",
+    ]
+    y = 50
+    for line in header_lines:
+        page.insert_text((50, y), line, fontsize=10)
+        y += 20
+    doc.save(path)
+    doc.close()
+
+
+class TestFullLegalNameRedaction:
+    """en_core_web_sm's PERSON span empirically doesn't reliably cover a
+    full "FIRST MIDDLE LAST" name the way statement headers actually print
+    it — it truncates, mis-tags part of the name as a too-short LOCATION,
+    or misses a last-name-first line entirely, each leaving a fragment of
+    the account holder's real legal name in the redacted output. These
+    reproduce each failure shape directly against the real pipeline (no
+    mocking, same as the rest of this file) to confirm the whole-line
+    fallback closes them.
+    """
+
+    @pytest.mark.parametrize("name_line", [
+        "JANE MARIE DOE",  # NER truncates to "JANE MARIE", dropping the surname
+        "DOE, JANE MARIE",  # last-name-first — NER misses "DOE" entirely
+        "ANNA-LISE VANDERBERG",  # hyphenated first name mis-tagged as a short LOCATION
+        "GEORGE W AKAI",  # truncates to "GEORGE W", dropping the surname
+    ])
+    def test_full_name_leaves_no_fragment_in_output(self, tmp_path, name_line):
+        input_path = str(tmp_path / "statement.pdf")
+        output_path = str(tmp_path / "statement_redacted.pdf")
+        _build_statement_with_name(input_path, name_line)
+
+        redact_pdf(input_path, output_path)
+        text = _extract_all_text(output_path)
+
+        for word in name_line.replace(",", "").split():
+            assert word not in text, f"{word!r} from {name_line!r} leaked into redacted output"
+
+
 class TestTransactionTablePreserved:
     def test_transaction_payee_names_are_not_redacted(self, redacted_statement):
         # The whole point of bank-transaction extraction is knowing who was

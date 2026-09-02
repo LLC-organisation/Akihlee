@@ -133,16 +133,33 @@ single best-fitting category strictly from this list; never invent one outside i
 statement is often laid out as a table with separate Deposit/Withdrawal columns plus a running \
 Balance column; read across each row rather than each column in isolation, and represent every \
 row as one object here regardless of which column its figure was under. Include every transaction \
-row from every page provided — do not summarize, truncate, or skip rows on a long statement:
+row from every page provided — do not summarize, truncate, or skip rows on a long statement. Do \
+NOT emit an entry for a "Beginning Balance" / "Ending Balance" row inside the transaction table \
+itself, or for an account-summary box's subtotal lines (e.g. "Deposits and Additions", "ATM & \
+Debit Card Withdrawals", "Electronic Withdrawals", "Other Withdrawals") — those are anchors/\
+aggregates of the real rows below them, already captured by beginning_balance/ending_balance \
+above, not transactions in their own right. A row's description may wrap onto a second or third \
+printed line before its amount appears (e.g. a long merchant name pushing the amount down a \
+line) — still treat it as one transaction, not multiple:
     {
       "transactionDate": string (ISO 8601 date, YYYY-MM-DD — infer the year from the statement's \
-header/period if a row only prints month/day),
+header/period if a row only prints month/day). Some statements print two dates per row — a \
+leading posting date for the row itself, plus a second (usually earlier) transaction/purchase \
+date embedded in the description, e.g. "08/16 Card Purchase 08/15 Merchant Name ...". Use the \
+row's own leading date here; leave the second date as part of description rather than discarding \
+it,
       "description": string or null,
-      "payeeOrPayer": string or null,
+      "payeeOrPayer": string or null — for a person-to-person transfer (e.g. "Zelle Payment From \
+Jane Doe" or "Zelle Payment To John Smith"), this is the counterparty's name (Jane Doe / John \
+Smith), not "Zelle",
       "amount": number — the signed transaction amount: positive for a deposit/credit/income row, \
 negative for a withdrawal/debit/expense row (e.g. -1920.34 for a $1,920.34 withdrawal). Never emit \
 an unsigned magnitude here even if the statement's own column is unsigned (e.g. separate Deposit/\
-Withdrawal columns) — you supply the sign based on which column/type the row belongs to,
+Withdrawal columns) — you supply the sign based on which column/type the row belongs to. Trust the \
+actual printed sign/column over a surface-level word match in the description — e.g. a "Card \
+Purchase Return" or "Purchase Refund" row is a credit (positive) despite containing the word \
+"Purchase", and "Zelle Payment To X" is a debit (negative) despite containing "Payment" the same \
+way "Zelle Payment From X" does for a credit,
       "type": one of "INCOME", "EXPENSE", "TRANSFER" — must agree with the sign of amount above,
       "balance": number or null — the running account balance printed on this row, if the \
 statement shows one (most do, as a third column after the transaction amount); null if this \
