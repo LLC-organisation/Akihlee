@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
-import { getAuthToken, aiCfoApi, AiCfoConversationSummary } from '@/lib/api-client';
+import { aiCfoApi, AiCfoConversationSummary } from '@/lib/api-client';
+import { useRequireAuth } from '@/lib/use-auth';
 import { AppSidebar } from '@/components/AppSidebar';
 import { AiCfoMarkdown } from '@/components/AiCfoMarkdown';
 
@@ -19,8 +19,7 @@ const WELCOME_MESSAGE: ChatMessage = {
 };
 
 export default function AiCfoPage() {
-  const router = useRouter();
-  const [checkedAuth, setCheckedAuth] = useState(false);
+  const { checkedAuth } = useRequireAuth();
   const [conversations, setConversations] = useState<AiCfoConversationSummary[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
@@ -28,14 +27,6 @@ export default function AiCfoPage() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!getAuthToken()) {
-      router.replace('/login');
-      return;
-    }
-    setCheckedAuth(true);
-  }, [router]);
 
   const loadConversations = useCallback(async () => {
     setLoadingConversations(true);

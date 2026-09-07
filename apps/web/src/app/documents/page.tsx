@@ -1,10 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { Route } from 'next';
-import { documentsApi, getAuthToken, Document } from '@/lib/api-client';
+import { documentsApi, Document } from '@/lib/api-client';
+import { useRequireAuth } from '@/lib/use-auth';
 import { AppSidebar } from '@/components/AppSidebar';
 import { StatusBadge } from '@/components/StatusBadge';
 import { SourceBadge } from '@/components/SourceBadge';
@@ -44,22 +44,13 @@ function TrashIcon() {
 }
 
 export default function DocumentsPage() {
-  const router = useRouter();
-  const [checkedAuth, setCheckedAuth] = useState(false);
+  const { checkedAuth } = useRequireAuth();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!getAuthToken()) {
-      router.replace('/login');
-      return;
-    }
-    setCheckedAuth(true);
-  }, [router]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -108,7 +99,7 @@ export default function DocumentsPage() {
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Documents</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Every receipt and invoice captured so far, from upload, email, WhatsApp, or Square.
+              Every receipt and invoice captured so far, from upload, email, Square, or QuickBooks.
               Click one to review and approve it.
             </p>
           </div>

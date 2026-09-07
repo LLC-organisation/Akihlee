@@ -4,11 +4,10 @@ import { useCallback, useEffect, useRef, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   adminAuditLogApi,
-  getAuthToken,
-  getCurrentUserRole,
   AuditLogEntry,
   AdminTenantSummary,
 } from '@/lib/api-client';
+import { useRequireAuth } from '@/lib/use-auth';
 import { AppSidebar } from '@/components/AppSidebar';
 import { AuditActionBadge } from '@/components/AuditActionBadge';
 import { TenantSelector } from '@/components/TenantSelector';
@@ -91,7 +90,7 @@ function describeError(err: unknown): ApiError {
 function AdminAuditLogPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [checkedAuth, setCheckedAuth] = useState(false);
+  const { checkedAuth, me } = useRequireAuth();
   const [rows, setRows] = useState<AuditLogEntry[]>([]);
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -116,16 +115,10 @@ function AdminAuditLogPageContent() {
   filtersRef.current = { actorEmail, tenant, action, from, to, search };
 
   useEffect(() => {
-    if (!getAuthToken()) {
-      router.replace('/login');
-      return;
-    }
-    if (getCurrentUserRole() !== 'ADMIN') {
+    if (me && me.role !== 'ADMIN') {
       router.replace('/dashboard');
-      return;
     }
-    setCheckedAuth(true);
-  }, [router]);
+  }, [me, router]);
 
   const load = useCallback(async (pageToLoad: number, opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
@@ -195,7 +188,7 @@ function AdminAuditLogPageContent() {
     setTimeout(() => load(0), 0);
   };
 
-  if (!checkedAuth) {
+  if (!checkedAuth || !me || me.role !== 'ADMIN') {
     return null;
   }
 

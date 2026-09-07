@@ -3,8 +3,7 @@
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { authApi, setAuthToken } from '@/lib/api-client';
-import { isAxiosError } from 'axios';
+import { supabase } from '@/lib/supabase-client';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -15,6 +14,7 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [confirmationSent, setConfirmationSent] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -31,21 +31,61 @@ export default function RegisterPage() {
 
     setSubmitting(true);
     try {
-      const auth = await authApi.register(businessName, email, password);
-      setAuthToken(auth.token);
-      router.push('/dashboard');
-    } catch (err) {
-      if (isAxiosError(err) && err.response?.status === 409) {
-        setError('An account with that email already exists. Try logging in instead.');
-      } else if (isAxiosError(err) && err.response?.status === 400) {
-        setError('Please check your details and try again.');
-      } else {
-        setError('Something went wrong. Please try again.');
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { businessName },
+          emailRedirectTo: `${window.location.origin}/login`,
+        },
+      });
+      if (signUpError) {
+        setError(
+          signUpError.message.toLowerCase().includes('registered')
+            ? 'An account with that email already exists. Try logging in instead.'
+            : 'Please check your details and try again.'
+        );
+        return;
       }
+      // A session here means the Supabase project has email confirmation
+      // turned off — go straight to the dashboard, matching the old
+      // instant-access flow. Otherwise there's no session until the
+      // confirmation link is clicked, so show the "check your email" state.
+      if (data.session) {
+        router.push('/dashboard');
+      } else {
+        setConfirmationSent(true);
+      }
+    } catch {
+      setError('Something went wrong. Please try again.');
     } finally {
       setSubmitting(false);
     }
   };
+
+  if (confirmationSent) {
+    return (
+      <div className="relative min-h-screen bg-white dark:bg-canvas">
+        <div className="bg-glow" />
+        <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white dark:bg-surface border border-slate-200 dark:border-white/10 rounded-2xl shadow-sm dark:shadow-none p-8 text-center">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Check your email</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+              We sent a confirmation link to{' '}
+              <span className="font-medium text-slate-700 dark:text-slate-300">{email}</span>. Click it to
+              activate your account, then log in.
+            </p>
+            <Link
+              href="/login"
+              className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors duration-200"
+            >
+              Back to login
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative min-h-screen bg-white dark:bg-canvas">

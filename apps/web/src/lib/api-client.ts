@@ -3,41 +3,9 @@
  */
 
 import axios from 'axios';
+import { supabase } from './supabase-client';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
-const TOKEN_STORAGE_KEY = 'akihlee_token';
-
-export const getAuthToken = (): string | null => {
-  if (typeof window === 'undefined') return null;
-  return window.localStorage.getItem(TOKEN_STORAGE_KEY);
-};
-
-/**
- * Reads the "role" claim straight out of the JWT payload rather than
- * storing it separately — the token is the single source of truth, so
- * there's no risk of a stale copy surviving a role change or logout.
- * Decoding a JWT payload is just base64url + JSON, no library needed.
- */
-export const getCurrentUserRole = (): 'USER' | 'ADMIN' | null => {
-  const token = getAuthToken();
-  if (!token) return null;
-  try {
-    const payload = token.split('.')[1];
-    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const decoded = JSON.parse(atob(base64));
-    return decoded.role === 'ADMIN' ? 'ADMIN' : 'USER';
-  } catch {
-    return null;
-  }
-};
-
-export const setAuthToken = (token: string): void => {
-  window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
-};
-
-export const clearAuthToken = (): void => {
-  window.localStorage.removeItem(TOKEN_STORAGE_KEY);
-};
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -46,12 +14,16 @@ export const apiClient = axios.create({
   },
 });
 
-// Request interceptor - attach the JWT issued at login/register, if we have one
+// Request interceptor - attach the current Supabase session's access token,
+// if we have one. getSession() resolves from Supabase's in-memory/localStorage
+// state without a network call (it only hits the network to refresh a token
+// that's actually expired), and the client refreshes proactively in the
+// background, so this stays a live token rather than a stale cached one.
 apiClient.interceptors.request.use(
-  (config) => {
-    const token = getAuthToken();
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+  async (config) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      config.headers.Authorization = `Bearer ${session.access_token}`;
     }
     return config;
   },
@@ -63,9 +35,9 @@ apiClient.interceptors.request.use(
 // Response interceptor - handle errors globally
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     if (error.response?.status === 401) {
-      clearAuthToken();
+      await supabase.auth.signOut();
       if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
@@ -83,41 +55,32 @@ export type Document = {
   contentType: string;
   sizeBytes: number;
   status: 'UPLOADED' | 'PROCESSING' | 'EXTRACTED' | 'REVIEW_REQUIRED' | 'APPROVED' | 'REJECTED';
-  source: 'UPLOAD' | 'EMAIL' | 'WHATSAPP' | 'SQUARE';
+  source: 'UPLOAD' | 'EMAIL' | 'WHATSAPP' | 'SQUARE' | 'QUICKBOOKS';
   createdAt: string;
 };
 
-export type AuthResponse = {
-  token: string;
-  tenantId: string;
+// Registration/login/password-change go straight to Supabase from the
+// browser (see lib/use-auth.ts) — core-api only needs to answer "who is
+// this" for whatever local Tenant/User a Supabase session resolved to
+// (auto-provisioned server-side on first authenticated request).
+export type MeResponse = {
+  userId: string;
   email: string;
+  tenantId: string;
+  role: 'USER' | 'ADMIN';
   businessName: string;
 };
 
 export const authApi = {
-  register: async (businessName: string, email: string, password: string): Promise<AuthResponse> => {
-    const response = await apiClient.post<AuthResponse>('/auth/register', {
-      businessName,
-      email,
-      password,
-    });
+  me: async (): Promise<MeResponse> => {
+    const response = await apiClient.get<MeResponse>('/auth/me');
     return response.data;
-  },
-
-  login: async (email: string, password: string): Promise<AuthResponse> => {
-    const response = await apiClient.post<AuthResponse>('/auth/login', { email, password });
-    return response.data;
-  },
-
-  changePassword: async (currentPassword: string, newPassword: string): Promise<void> => {
-    await apiClient.put('/auth/change-password', { currentPassword, newPassword });
   },
 };
 
 export type Tenant = {
   id: string;
   businessName: string;
-  whatsappPhoneNumber: string | null;
   inboundEmailAddress: string;
   squareConnected: boolean;
   quickbooksConnected: boolean;
@@ -131,16 +94,6 @@ export const tenantApi = {
 
   updateBusinessName: async (businessName: string): Promise<Tenant> => {
     const response = await apiClient.put<Tenant>('/tenant', { businessName });
-    return response.data;
-  },
-
-  connectWhatsApp: async (phoneNumber: string): Promise<Tenant> => {
-    const response = await apiClient.put<Tenant>('/tenant/whatsapp-number', { phoneNumber });
-    return response.data;
-  },
-
-  disconnectWhatsApp: async (): Promise<Tenant> => {
-    const response = await apiClient.delete<Tenant>('/tenant/whatsapp-number');
     return response.data;
   },
 };

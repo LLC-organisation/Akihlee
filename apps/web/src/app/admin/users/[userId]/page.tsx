@@ -5,11 +5,10 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   adminUsersApi,
-  getAuthToken,
-  getCurrentUserRole,
   UserDetail,
   AuditLogEntry,
 } from '@/lib/api-client';
+import { useRequireAuth } from '@/lib/use-auth';
 import { AppSidebar } from '@/components/AppSidebar';
 import { AuditActionBadge } from '@/components/AuditActionBadge';
 import { AuditDetailDrawer } from '@/components/AuditDetailDrawer';
@@ -98,7 +97,7 @@ export default function AdminUserProfilePage({ params }: { params: { userId: str
   const router = useRouter();
   const userId = params.userId;
 
-  const [checkedAuth, setCheckedAuth] = useState(false);
+  const { checkedAuth, me } = useRequireAuth();
   const [detail, setDetail] = useState<UserDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -112,16 +111,10 @@ export default function AdminUserProfilePage({ params }: { params: { userId: str
   const [selectedEntry, setSelectedEntry] = useState<AuditLogEntry | null>(null);
 
   useEffect(() => {
-    if (!getAuthToken()) {
-      router.replace('/login');
-      return;
-    }
-    if (getCurrentUserRole() !== 'ADMIN') {
+    if (me && me.role !== 'ADMIN') {
       router.replace('/dashboard');
-      return;
     }
-    setCheckedAuth(true);
-  }, [router]);
+  }, [me, router]);
 
   const loadDetail = useCallback(async () => {
     setLoading(true);
@@ -178,7 +171,7 @@ export default function AdminUserProfilePage({ params }: { params: { userId: str
     }
   };
 
-  if (!checkedAuth) {
+  if (!checkedAuth || !me || me.role !== 'ADMIN') {
     return null;
   }
 

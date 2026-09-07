@@ -4,13 +4,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   adminUsersApi,
-  getAuthToken,
-  getCurrentUserRole,
   UserDirectoryEntry,
   UserSummary,
   UserRole,
   AdminTenantSummary,
 } from '@/lib/api-client';
+import { useRequireAuth } from '@/lib/use-auth';
 import { AppSidebar } from '@/components/AppSidebar';
 import { TenantSelector } from '@/components/TenantSelector';
 import { UserStatusBadge } from '@/components/UserStatusBadge';
@@ -50,7 +49,7 @@ function KpiCard({ label, value, hint }: { label: string; value: string; hint?: 
 
 export default function AdminUsersPage() {
   const router = useRouter();
-  const [checkedAuth, setCheckedAuth] = useState(false);
+  const { checkedAuth, me } = useRequireAuth();
 
   const [rows, setRows] = useState<UserDirectoryEntry[]>([]);
   const [summary, setSummary] = useState<UserSummary | null>(null);
@@ -68,16 +67,10 @@ export default function AdminUsersPage() {
   const [sortBy, setSortBy] = useState<'lastActiveAt' | 'documentsProcessed'>('lastActiveAt');
 
   useEffect(() => {
-    if (!getAuthToken()) {
-      router.replace('/login');
-      return;
-    }
-    if (getCurrentUserRole() !== 'ADMIN') {
+    if (me && me.role !== 'ADMIN') {
       router.replace('/dashboard');
-      return;
     }
-    setCheckedAuth(true);
-  }, [router]);
+  }, [me, router]);
 
   const load = useCallback(
     async (pageToLoad: number) => {
@@ -147,7 +140,7 @@ export default function AdminUsersPage() {
     }
   };
 
-  if (!checkedAuth) {
+  if (!checkedAuth || !me || me.role !== 'ADMIN') {
     return null;
   }
 

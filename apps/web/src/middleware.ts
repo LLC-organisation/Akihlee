@@ -3,6 +3,11 @@ import type { NextRequest } from 'next/server';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
 const API_ORIGIN = new URL(API_BASE_URL).origin;
+// The browser now talks to Supabase directly for signUp/signInWithPassword/
+// session refresh (see lib/supabase-client.ts) — not just core-api.
+const SUPABASE_ORIGIN = process.env.NEXT_PUBLIC_SUPABASE_URL
+  ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).origin
+  : null;
 const isDev = process.env.NODE_ENV !== 'production';
 
 // Next dev's HMR/React Refresh runtime relies on eval-based source maps —
@@ -15,7 +20,7 @@ const CONTENT_SECURITY_POLICY = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
-  `connect-src 'self' ${API_ORIGIN}`,
+  `connect-src 'self' ${API_ORIGIN}${SUPABASE_ORIGIN ? ` ${SUPABASE_ORIGIN}` : ''}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -30,9 +35,10 @@ const CONTENT_SECURITY_POLICY = [
 // middleware — Next stamps its s-maxage/stale-while-revalidate value onto
 // cached page output after middleware runs. That's acceptable here: every
 // page in this app is a client-rendered shell with no per-user data baked
-// into the HTML (auth state lives in localStorage, financial data loads
-// via authenticated fetch calls after mount), so what Next caches is safe
-// to cache. The header below still applies as intended to every JSON
+// into the HTML (auth state lives in the Supabase client's localStorage
+// session, financial data loads via authenticated fetch calls after
+// mount), so what Next caches is safe to cache. The header below still
+// applies as intended to every JSON
 // response and Server-rendered/dynamic route, which is where any actual
 // sensitive payload would appear; core-api's API responses separately
 // enforce their own no-store via Spring Security (see SecurityConfig).

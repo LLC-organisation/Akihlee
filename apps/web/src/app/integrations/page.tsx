@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState, FormEvent, Suspense } from 'react';
+import { useCallback, useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { getAuthToken, tenantApi, integrationsApi, Tenant } from '@/lib/api-client';
+import { tenantApi, integrationsApi, Tenant } from '@/lib/api-client';
+import { useRequireAuth } from '@/lib/use-auth';
 import { AppSidebar } from '@/components/AppSidebar';
 import { isAxiosError } from 'axios';
 
@@ -48,20 +49,6 @@ function EmailLogo() {
   );
 }
 
-function WhatsAppLogo() {
-  return (
-    <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.362-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"
-        />
-      </svg>
-    </span>
-  );
-}
-
 function SquareLogo() {
   return (
     <span className="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-900 dark:bg-white shrink-0">
@@ -84,93 +71,12 @@ function QuickBooksLogo() {
   );
 }
 
-const inputClasses =
-  'w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-canvas px-3 py-2.5 text-slate-900 dark:text-white focus:border-blue-500 dark:focus:border-blue-400 transition-colors duration-200';
 const primaryButtonClasses =
   'inline-flex items-center justify-center gap-2 bg-accent-gradient text-white text-sm font-medium rounded-lg px-4 py-2.5 hover:opacity-90 hover:shadow-md hover:shadow-blue-500/20 transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none';
 const successBanner =
   'mb-4 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-sm px-4 py-3';
 const errorBanner =
   'mb-4 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400 text-sm px-4 py-3';
-
-function WhatsAppSection({ tenant, onUpdated }: { tenant: Tenant; onUpdated: (t: Tenant) => void }) {
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
-  const handleConnect = async (e: FormEvent) => {
-    e.preventDefault();
-    setMessage(null);
-    setSaving(true);
-    try {
-      const updated = await tenantApi.connectWhatsApp(phoneNumber);
-      onUpdated(updated);
-      setPhoneNumber('');
-      setMessage({ type: 'success', text: 'WhatsApp number connected.' });
-    } catch (err) {
-      if (isAxiosError(err) && err.response?.status === 409) {
-        setMessage({ type: 'error', text: 'That number is already connected to another account.' });
-      } else {
-        setMessage({ type: 'error', text: 'Enter a valid phone number with country code (e.g. +254712345678).' });
-      }
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDisconnect = async () => {
-    setMessage(null);
-    setSaving(true);
-    try {
-      const updated = await tenantApi.disconnectWhatsApp();
-      onUpdated(updated);
-      setMessage({ type: 'success', text: 'WhatsApp number disconnected.' });
-    } catch {
-      setMessage({ type: 'error', text: 'Could not disconnect. Please try again.' });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <SectionCard
-      title="WhatsApp"
-      icon={<WhatsAppLogo />}
-      description="Connect a WhatsApp number so you can send receipts and invoices directly to Akihlee."
-    >
-      {message && <div className={message.type === 'success' ? successBanner : errorBanner}>{message.text}</div>}
-
-      {tenant.whatsappPhoneNumber ? (
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <p className="text-sm text-slate-600 dark:text-slate-300">
-            Connected: <span className="font-medium text-slate-900 dark:text-white">+{tenant.whatsappPhoneNumber}</span>
-          </p>
-          <button
-            onClick={handleDisconnect}
-            disabled={saving}
-            className="px-4 py-2 text-sm font-medium rounded-lg border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors duration-200"
-          >
-            {saving ? 'Disconnecting…' : 'Disconnect'}
-          </button>
-        </div>
-      ) : (
-        <form onSubmit={handleConnect} className="flex flex-col sm:flex-row gap-3">
-          <input
-            type="tel"
-            required
-            value={phoneNumber}
-            onChange={(e) => setPhoneNumber(e.target.value)}
-            placeholder="+254712345678"
-            className={`${inputClasses} sm:flex-1`}
-          />
-          <button type="submit" disabled={saving} className={primaryButtonClasses}>
-            {saving ? 'Connecting…' : 'Connect WhatsApp'}
-          </button>
-        </form>
-      )}
-    </SectionCard>
-  );
-}
 
 function EmailSection({ tenant }: { tenant: Tenant }) {
   const [copied, setCopied] = useState(false);
@@ -465,8 +371,7 @@ function useOAuthBanner(
 // around anything that calls it, or `next build` fails prerendering this
 // route — see the default export below.
 function IntegrationsPageContent() {
-  const router = useRouter();
-  const [checkedAuth, setCheckedAuth] = useState(false);
+  const { checkedAuth } = useRequireAuth();
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -476,14 +381,6 @@ function IntegrationsPageContent() {
   const quickbooksOAuthBanner = useOAuthBanner(
     'quickbooks', 'QuickBooks connected.', 'Could not connect to QuickBooks. Please try again.'
   );
-
-  useEffect(() => {
-    if (!getAuthToken()) {
-      router.replace('/login');
-      return;
-    }
-    setCheckedAuth(true);
-  }, [router]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -523,7 +420,6 @@ function IntegrationsPageContent() {
           {!loading && !error && tenant && (
             <div className="space-y-6">
               <EmailSection tenant={tenant} />
-              <WhatsAppSection tenant={tenant} onUpdated={setTenant} />
               <SquareSection tenant={tenant} onUpdated={setTenant} oauthBanner={squareOAuthBanner} />
               <QuickBooksSection tenant={tenant} onUpdated={setTenant} oauthBanner={quickbooksOAuthBanner} />
             </div>

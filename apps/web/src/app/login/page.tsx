@@ -3,8 +3,7 @@
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { authApi, setAuthToken } from '@/lib/api-client';
-import { isAxiosError } from 'axios';
+import { supabase } from '@/lib/supabase-client';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -19,15 +18,18 @@ export default function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      const auth = await authApi.login(email, password);
-      setAuthToken(auth.token);
-      router.push('/dashboard');
-    } catch (err) {
-      if (isAxiosError(err) && err.response?.status === 401) {
-        setError('Invalid email or password.');
-      } else {
-        setError('Something went wrong. Please try again.');
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) {
+        setError(
+          signInError.message.toLowerCase().includes('confirm')
+            ? 'Please confirm your email before logging in — check your inbox.'
+            : 'Invalid email or password.'
+        );
+        return;
       }
+      router.push('/dashboard');
+    } catch {
+      setError('Something went wrong. Please try again.');
     } finally {
       setSubmitting(false);
     }

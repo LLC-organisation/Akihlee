@@ -9,7 +9,6 @@ import {
   bankTransactionsApi,
   vendorRulesApi,
   analyticsApi,
-  getAuthToken,
   Document,
   ExtractedData,
   UpdateExtractedDataRequest,
@@ -17,6 +16,7 @@ import {
   BankTransaction,
   AnomalyAlert,
 } from '@/lib/api-client';
+import { useRequireAuth } from '@/lib/use-auth';
 import { AppSidebar } from '@/components/AppSidebar';
 import { StatusBadge } from '@/components/StatusBadge';
 import { SourceBadge } from '@/components/SourceBadge';
@@ -695,7 +695,7 @@ export default function DocumentDetailPage({ params }: { params: { id: string } 
   const router = useRouter();
   const documentId = params.id;
 
-  const [checkedAuth, setCheckedAuth] = useState(false);
+  const { checkedAuth } = useRequireAuth();
   const [doc, setDoc] = useState<Document | null>(null);
   const [data, setData] = useState<ExtractedData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -725,14 +725,6 @@ export default function DocumentDetailPage({ params }: { params: { id: string } 
   const [actionError, setActionError] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
-
-  useEffect(() => {
-    if (!getAuthToken()) {
-      router.replace('/login');
-      return;
-    }
-    setCheckedAuth(true);
-  }, [router]);
 
   const load = useCallback(async () => {
     setLoading(true);

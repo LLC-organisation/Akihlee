@@ -1,10 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { Route } from 'next';
-import { extractedDataApi, documentsApi, getAuthToken, Document, ExtractedData, UpdateExtractedDataRequest } from '@/lib/api-client';
+import { extractedDataApi, documentsApi, Document, ExtractedData, UpdateExtractedDataRequest } from '@/lib/api-client';
+import { useRequireAuth } from '@/lib/use-auth';
 import { AppSidebar } from '@/components/AppSidebar';
 import { DocumentTypeBadge } from '@/components/DocumentTypeBadge';
 import { ExtractionMethodBadge } from '@/components/ExtractionMethodBadge';
@@ -61,8 +61,7 @@ type EditingCell = { rowId: string; field: 'merchant' | 'date' | 'amount' } | nu
 const NEEDS_REVIEW_STATUSES: Document['status'][] = ['EXTRACTED', 'REVIEW_REQUIRED'];
 
 export default function ExtractedDataPage() {
-  const router = useRouter();
-  const [checkedAuth, setCheckedAuth] = useState(false);
+  const { checkedAuth } = useRequireAuth();
   const [rows, setRows] = useState<ExtractedData[]>([]);
   const [documentStatusById, setDocumentStatusById] = useState<Map<string, Document['status']>>(new Map());
   const [page, setPage] = useState(0);
@@ -76,14 +75,6 @@ export default function ExtractedDataPage() {
   const [draftCurrency, setDraftCurrency] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!getAuthToken()) {
-      router.replace('/login');
-      return;
-    }
-    setCheckedAuth(true);
-  }, [router]);
 
   const load = useCallback(async (pageToLoad: number) => {
     setLoading(true);

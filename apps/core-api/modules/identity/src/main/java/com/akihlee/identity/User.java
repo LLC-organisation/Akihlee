@@ -25,9 +25,16 @@ public class User {
     @Column(nullable = false, unique = true)
     private String email;
 
-    @NotBlank
-    @Column(name = "password_hash", nullable = false)
+    // Nullable since Supabase-provisioned users (see UserProvisioningService)
+    // have no local password at all — Supabase owns the credential.
+    @Column(name = "password_hash")
     private String passwordHash;
+
+    // Links this row to its Supabase Auth identity (the JWT's `sub` claim).
+    // Null for rows that predate the Supabase migration and haven't reset
+    // their password yet.
+    @Column(name = "supabase_user_id")
+    private UUID supabaseUserId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -57,6 +64,15 @@ public class User {
         this.updatedAt = Instant.now();
     }
 
+    /** Auto-provisioned on first sight of a verified Supabase JWT — see UserProvisioningService. */
+    public User(UUID tenantId, String email, UUID supabaseUserId) {
+        this.tenantId = tenantId;
+        this.email = email;
+        this.supabaseUserId = supabaseUserId;
+        this.createdAt = Instant.now();
+        this.updatedAt = Instant.now();
+    }
+
     public UUID getId() {
         return id;
     }
@@ -71,6 +87,10 @@ public class User {
 
     public String getPasswordHash() {
         return passwordHash;
+    }
+
+    public UUID getSupabaseUserId() {
+        return supabaseUserId;
     }
 
     public UserRole getRole() {

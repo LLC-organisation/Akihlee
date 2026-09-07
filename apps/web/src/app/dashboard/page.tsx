@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { documentsApi, tenantApi, getAuthToken, Document } from '@/lib/api-client';
+import { documentsApi, tenantApi, Document } from '@/lib/api-client';
+import { useRequireAuth } from '@/lib/use-auth';
 import { StatusBadge } from '@/components/StatusBadge';
 import { AppSidebar } from '@/components/AppSidebar';
 import { FinancialAnalyticsOverview } from '@/components/FinancialAnalyticsOverview';
@@ -133,7 +134,7 @@ export default function Dashboard() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [checkedAuth, setCheckedAuth] = useState(false);
+  const { checkedAuth } = useRequireAuth();
   const [businessName, setBusinessName] = useState<string | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loadingList, setLoadingList] = useState(true);
@@ -145,14 +146,6 @@ export default function Dashboard() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'NEEDS_REVIEW' | 'APPROVED' | 'REJECTED'>('ALL');
   const recentDocumentsRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!getAuthToken()) {
-      router.replace('/login');
-      return;
-    }
-    setCheckedAuth(true);
-  }, [router]);
 
   const loadDocuments = useCallback(async () => {
     setLoadingList(true);

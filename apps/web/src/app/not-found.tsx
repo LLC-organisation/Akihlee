@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getAuthToken } from '@/lib/api-client';
+import { supabase } from '@/lib/supabase-client';
 
 const primaryButtonClasses =
   'inline-flex items-center justify-center gap-2 bg-accent-gradient text-white text-sm font-medium rounded-lg px-5 py-2.5 hover:opacity-90 hover:shadow-md hover:shadow-blue-500/20 transition-all duration-200';
@@ -20,10 +20,18 @@ export default function NotFound() {
   const [destination, setDestination] = useState<'/dashboard' | '/'>('/');
 
   useEffect(() => {
-    const target = getAuthToken() ? '/dashboard' : '/';
-    setDestination(target);
-    const timer = setTimeout(() => router.replace(target), REDIRECT_DELAY_MS);
-    return () => clearTimeout(timer);
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (cancelled) return;
+      const target = session ? '/dashboard' : '/';
+      setDestination(target);
+      timer = setTimeout(() => router.replace(target), REDIRECT_DELAY_MS);
+    });
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [router]);
 
   const destinationLabel = destination === '/dashboard' ? 'Dashboard' : 'Homepage';

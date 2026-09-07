@@ -7,8 +7,12 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-validation")
+    // Verifies Supabase-issued JWTs against its JWKS endpoint (signature,
+    // expiry, issuer) — see SecurityConfig's JwtDecoder bean.
+    implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
 
-    // JWT
+    // Only used for the app's own short-lived OAuth "state" tokens now
+    // (Square/QuickBooks connect flows) — user login tokens are Supabase's.
     implementation("io.jsonwebtoken:jjwt-api:0.12.6")
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.6")

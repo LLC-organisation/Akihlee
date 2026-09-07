@@ -2,10 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRequireAuth } from '@/lib/use-auth';
 import {
   analyticsApi,
-  getAuthToken,
   CategoryAmount,
   FinancialOverview,
   Granularity,
@@ -280,8 +279,7 @@ function KpiCard({ label, value, hint, hintClass }: { label: string; value: stri
 }
 
 export default function AnalyticsPage() {
-  const router = useRouter();
-  const [checkedAuth, setCheckedAuth] = useState(false);
+  const { checkedAuth } = useRequireAuth();
 
   const ranges = quickRanges();
   const defaultRange = ranges.find((r) => r.key === '1Y')!;
@@ -311,14 +309,6 @@ export default function AnalyticsPage() {
   // Independent of the from/to range picker above — it's always "trailing
   // 60 days from today, projected 30 days forward," not a range query.
   const [cashFlowProjection, setCashFlowProjection] = useState<CashFlowProjection[]>([]);
-
-  useEffect(() => {
-    if (!getAuthToken()) {
-      router.replace('/login');
-      return;
-    }
-    setCheckedAuth(true);
-  }, [router]);
 
   useEffect(() => {
     if (!checkedAuth) return;

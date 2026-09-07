@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { clearAuthToken, getCurrentUserRole } from '@/lib/api-client';
+import { useRequireAuth, signOut } from '@/lib/use-auth';
 import { ThemeToggle } from './ThemeToggle';
 
 // /public/logo-icon.png is a cropped, icon-only version of the full
@@ -181,14 +181,14 @@ export function AppSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  // The page rendering this sidebar already calls useRequireAuth() itself
+  // (for its own redirect-if-unauthenticated check) — calling it again here
+  // just for isAdmin costs one extra /auth/me fetch per page load, which is
+  // simpler than threading isAdmin down as a prop through every page.
+  const { isAdmin } = useRequireAuth();
 
-  useEffect(() => {
-    setIsAdmin(getCurrentUserRole() === 'ADMIN');
-  }, []);
-
-  const handleLogout = () => {
-    clearAuthToken();
+  const handleLogout = async () => {
+    await signOut();
     router.push('/login');
   };
 

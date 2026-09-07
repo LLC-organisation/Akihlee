@@ -21,8 +21,8 @@ akihlee/
 │   │   ├── modules/
 │   │   │   ├── identity/   # Tenants, users, JWT auth, security config
 │   │   │   ├── documents/  # Document capture, storage, OCR pipeline,
-│   │   │   │               #   WhatsApp/email webhooks, AI CFO placeholder
-│   │   │   ├── finance/    # Square POS integration
+│   │   │   │               #   email webhook, AI CFO placeholder
+│   │   │   ├── finance/    # Square/QuickBooks integrations
 │   │   │   └── app/        # Main Spring Boot application, config, migrations
 │   │   ├── Dockerfile       # For Render (or any container host)
 │   │   └── build.gradle.kts
@@ -114,10 +114,10 @@ Frontend: http://localhost:3000
 
 The live deployment uses four services. Roughly, in order:
 
-1. **Supabase** — create a project, then get the **Session Pooler** connection string (Project Settings → Database → Connection Pooling → *Session mode*, not Transaction mode — Flyway needs session-level features). Also enable Storage and create `documents`/`exports` buckets (S3-compatible; get an S3 access key/secret under Storage settings).
+1. **Supabase** — create a project, then get the **Session Pooler** connection string (Project Settings → Database → Connection Pooling → *Session mode*, not Transaction mode — Flyway needs session-level features). Also enable Storage and create `documents`/`exports` buckets (S3-compatible; get an S3 access key/secret under Storage settings). For Auth: enable "Confirm email" (Authentication → Providers → Email), then grab the project URL and `anon` public key (Settings → API) for the frontend, and the JWKS URL/issuer (`https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json` / `https://<project-ref>.supabase.co/auth/v1`) for core-api.
 2. **Google Cloud Pub/Sub** — create the `documents-received` topic and a `documents-received-push` push subscription pointed at document-worker's deployed URL (see `infrastructure/terraform/pubsub.tf`). No credentials to manage — core-api's Pub/Sub client uses Application Default Credentials automatically wherever it's hosted on GCP.
 3. **Render** — new Web Service, root directory `apps/core-api` (uses its `Dockerfile`). Set all the env vars below, generating fresh secrets for `JWT_SECRET`/`ENCRYPTION_KEY`/`INTERNAL_API_KEY` — don't reuse the dev placeholders. Also deploy `document-worker` as a Background Worker the same way (root directory `apps/document-worker`), pointed at the same Supabase Storage, with `CORE_API_URL` set to the core-api service's Render URL.
-4. **Vercel** — new project, root directory `apps/web`, env var `NEXT_PUBLIC_API_URL` pointing at the Render service (`https://<service>.onrender.com/api/v1`).
+4. **Vercel** — new project, root directory `apps/web`, env vars: `NEXT_PUBLIC_API_URL` pointing at the Render service (`https://<service>.onrender.com/api/v1`), plus `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` from step 1 — the browser talks to Supabase directly for login/signup, not through core-api.
 
 Key gotchas hit while setting this up (see `.env.example` for the full annotated list):
 - `DATABASE_URL` must be `jdbc:postgresql://host:port/db` — not the plain `postgresql://user:pass@host/db` string these dashboards hand you, and never with the credentials embedded or wrapped in quotes (most PaaS dashboards pass env values through literally, quotes included).
@@ -157,9 +157,8 @@ No tests exist yet for the auth, OCR pipeline, or frontend code added since MVP.
 - **Real JWT authentication** — register/login/change-password, BCrypt password hashing, per-tenant data isolation verified end-to-end
 - **Document upload** to S3-compatible storage (Supabase Storage in production, MinIO locally), with a full REST API (`/api/v1/documents`, `/api/v1/auth/*`, `/api/v1/tenant/*`)
 - **Async OCR pipeline**: upload → Pub/Sub → `document-worker` (real Tesseract OCR + `pdf2image` for PDFs, regex-based field extraction — no LLM configured) → REST callback → `ExtractedData` table → paginated `/extracted-data` page. This is what will feed the AI CFO.
-- **WhatsApp integration via Twilio** — inbound webhook (form-encoded, signature-verified) feeds attached receipts/invoices into the same upload pipeline; outbound replies sent via the Twilio Messages API; needs `TWILIO_*` env vars to actually send/receive
 - **Inbound email webhook** — scaffolded around SendGrid Inbound Parse's format; each tenant gets a derived `{tenantId}@{domain}` address (shown in Settings); inert until a domain with MX records pointed at a provider is configured
-- **Settings page** — appearance (light/dark, user-toggled), business name, change password, WhatsApp connect/disconnect, email address display
+- **Settings page** — appearance (light/dark, user-toggled), business name, change password, email address display
 - **Placeholder AI CFO chat page** (`/ai-cfo`) — grounds replies in real `ExtractedData` stats rather than a real LLM (none configured; natural extension point once one is)
 - **Square integration** for POS/payment data collection — idempotent sync, cents→decimal conversion, tenant-isolated import, reconciliation tracking
 - **Full light/dark theme**, mobile-first responsive UI with a hamburger nav
@@ -171,7 +170,7 @@ No tests exist yet for the auth, OCR pipeline, or frontend code added since MVP.
 - No automated tests for any of the above (auth, OCR pipeline, webhooks, frontend)
 - No `spring-boot-starter-actuator` or OpenAPI/Swagger — no `/actuator/health` or API docs endpoint yet
 - Double-entry ledger module not started
-- Email ingestion needs a real external account (a domain + inbound-parse provider) before it does anything beyond respond to its own verification handshake; WhatsApp needs `TWILIO_AUTH_TOKEN` set to actually send/receive (account SID/number are configured)
+- Email ingestion needs a real external account (a domain + inbound-parse provider) before it does anything beyond respond to its own verification handshake
 - OCR field extraction is regex/heuristic-based, not LLM-based (no `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` configured)
 
 ### 📅 Planned
@@ -193,7 +192,7 @@ Every database record carries a `tenant_id` enforced at the query level:
 Optional<Document> findByIdAndTenantId(UUID id, UUID tenantId);
 ```
 
-Thread-local `TenantContext` makes the tenant ID available throughout the request lifecycle — set by `JwtAuthenticationFilter` from the JWT's claims (not a client-supplied header) for user requests, or resolved by phone/email address for the WhatsApp/email webhooks.
+Thread-local `TenantContext` makes the tenant ID available throughout the request lifecycle — set by `JwtAuthenticationFilter` from the JWT's claims (not a client-supplied header) for user requests, or resolved by the derived address for the inbound-email webhook.
 
 ### Authentication
 
@@ -205,7 +204,7 @@ Thread-local `TenantContext` makes the tenant ID available throughout the reques
 
 ### Admin Access & Audit Log
 
-Every login (success/failure), password change, document upload, OCR status change, extracted-data correction, and WhatsApp connect/disconnect is written to an `audit_log` table — denormalized at write time (actor email, tenant name) so the trail survives later account changes or deletions. `/admin/audit-log` in the app (backed by `GET /api/v1/admin/audit-log`) gives a searchable, cross-tenant view of it, for troubleshooting a specific user's actions or reconstructing a timeline during a security investigation.
+Every login (success/failure), password change, document upload, OCR status change, and extracted-data correction is written to an `audit_log` table — denormalized at write time (actor email, tenant name) so the trail survives later account changes or deletions. `/admin/audit-log` in the app (backed by `GET /api/v1/admin/audit-log`) gives a searchable, cross-tenant view of it, for troubleshooting a specific user's actions or reconstructing a timeline during a security investigation.
 
 There's no self-service way to become an admin — every account is created with `role = USER`, and the only way to promote one is a direct database update:
 
@@ -296,5 +295,5 @@ Proprietary - All rights reserved
 ---
 
 **Status**: 🟢 Deployed, MVP feature set functional end-to-end
-**Current Phase**: Phase 1 (Document Capture MVP) complete; early Phase 2 features (WhatsApp/email ingestion scaffolds, AI CFO placeholder) in place pending external service credentials
+**Current Phase**: Phase 1 (Document Capture MVP) complete; early Phase 2 features (email ingestion scaffold, AI CFO placeholder) in place pending external service credentials
 **Last Updated**: August 2026

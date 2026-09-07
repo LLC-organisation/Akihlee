@@ -1,12 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useState, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { getAuthToken, tenantApi, authApi, Tenant } from '@/lib/api-client';
+import { tenantApi, Tenant } from '@/lib/api-client';
+import { useRequireAuth } from '@/lib/use-auth';
+import { supabase } from '@/lib/supabase-client';
 import { AppSidebar } from '@/components/AppSidebar';
 import { getStoredTheme, setTheme, Theme } from '@/lib/theme';
-import { isAxiosError } from 'axios';
 
 function SectionCard({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
@@ -126,17 +126,32 @@ function ChangePasswordSection() {
 
     setSaving(true);
     try {
-      await authApi.changePassword(currentPassword, newPassword);
+      // Supabase's updateUser() doesn't itself verify the caller's current
+      // password, so re-authenticate with it first — same UX guarantee the
+      // old backend-checked flow gave (a stolen/left-open session alone
+      // isn't enough to change the password).
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) {
+        setMessage({ type: 'error', text: 'Your session has expired. Please log in again.' });
+        return;
+      }
+      const { error: reauthError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      });
+      if (reauthError) {
+        setMessage({ type: 'error', text: 'Current password is incorrect.' });
+        return;
+      }
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+      if (updateError) throw updateError;
+
       setMessage({ type: 'success', text: 'Password changed successfully.' });
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-    } catch (err) {
-      if (isAxiosError(err) && err.response?.status === 400) {
-        setMessage({ type: 'error', text: 'Current password is incorrect.' });
-      } else {
-        setMessage({ type: 'error', text: 'Could not change password. Please try again.' });
-      }
+    } catch {
+      setMessage({ type: 'error', text: 'Could not change password. Please try again.' });
     } finally {
       setSaving(false);
     }
@@ -203,19 +218,10 @@ function LegalSection() {
 }
 
 export default function SettingsPage() {
-  const router = useRouter();
-  const [checkedAuth, setCheckedAuth] = useState(false);
+  const { checkedAuth } = useRequireAuth();
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!getAuthToken()) {
-      router.replace('/login');
-      return;
-    }
-    setCheckedAuth(true);
-  }, [router]);
 
   const load = useCallback(async () => {
     setLoading(true);

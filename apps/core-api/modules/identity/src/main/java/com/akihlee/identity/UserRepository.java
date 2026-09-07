@@ -15,6 +15,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     Optional<User> findByEmail(String email);
 
+    Optional<User> findBySupabaseUserId(UUID supabaseUserId);
+
     // Fan-out target for tenant-wide notifications (e.g. a document finishing
     // OCR) — every active user in the tenant gets their own notification row.
     List<User> findByTenantIdAndActiveTrue(UUID tenantId);
