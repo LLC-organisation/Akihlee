@@ -19,8 +19,8 @@ import java.util.Map;
  * Review Alert" from the notification spec, since it's the same signal
  * document-worker already computed to decide EXTRACTED vs REVIEW_REQUIRED.
  *
- * Plain @EventListener (not @TransactionalEventListener), matching
- * WhatsAppConnectionListener's synchronous, same-thread-as-publisher style.
+ * Plain @EventListener (not @TransactionalEventListener) — synchronous,
+ * same-thread-as-publisher.
  */
 @Component
 public class DocumentExtractionListener {

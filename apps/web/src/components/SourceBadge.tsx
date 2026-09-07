@@ -8,6 +8,7 @@ const STYLES: Record<Document['source'], string> = {
   EMAIL: 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300',
   WHATSAPP: 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300',
   SQUARE: 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300',
+  QUICKBOOKS: 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300',
 };
 
 const LABELS: Record<Document['source'], string> = {
@@ -15,6 +16,7 @@ const LABELS: Record<Document['source'], string> = {
   EMAIL: 'Email',
   WHATSAPP: 'WhatsApp',
   SQUARE: 'Square',
+  QUICKBOOKS: 'QuickBooks',
 };
 
 export function SourceBadge({ source }: { source: Document['source'] }) {

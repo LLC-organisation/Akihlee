@@ -7,7 +7,7 @@ import java.util.UUID;
 
 /**
  * Immutable trail of security- and troubleshooting-relevant events (logins,
- * password changes, document uploads/status changes, WhatsApp
+ * password changes, document uploads/status changes, integration
  * connect/disconnect) for admin-only review — day-to-day "why did this fail
  * for this user" support, and, for security incidents, a non-repudiation
  * timeline of who did what, when, and from where.

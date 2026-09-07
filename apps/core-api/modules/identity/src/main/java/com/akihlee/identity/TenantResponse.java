@@ -5,7 +5,6 @@ import java.util.UUID;
 public record TenantResponse(
         UUID id,
         String businessName,
-        String whatsappPhoneNumber,
         String inboundEmailAddress,
         boolean squareConnected,
         boolean quickbooksConnected) {
@@ -14,7 +13,6 @@ public record TenantResponse(
         return new TenantResponse(
                 tenant.getId(),
                 tenant.getBusinessName(),
-                tenant.getWhatsappPhoneNumber(),
                 tenant.getId() + "@" + inboundEmailDomain,
                 tenant.isSquareConnected(),
                 tenant.isQuickbooksConnected());

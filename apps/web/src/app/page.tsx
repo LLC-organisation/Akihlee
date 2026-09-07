@@ -37,7 +37,7 @@ const FEATURES = [
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
     ),
     title: 'Document Capture',
-    description: 'Upload receipts and invoices, or send them by email or WhatsApp. OCR extracts the numbers automatically.',
+    description: 'Upload receipts and invoices, or send them by email. OCR extracts the numbers automatically.',
   },
   {
     iconWrapperClass: 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
@@ -58,7 +58,7 @@ const FEATURES = [
 const STEPS = [
   {
     title: 'Upload & Connect',
-    description: 'Send receipts by upload, email, or WhatsApp, or sync transactions in from Square.',
+    description: 'Send receipts by upload or email, or sync transactions in from Square or QuickBooks.',
   },
   {
     title: 'AI Extracts the Numbers',
@@ -132,8 +132,11 @@ export default function Home() {
               <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300">
                 Square
               </span>
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300">
+                QuickBooks
+              </span>
               <span className="text-slate-300 dark:text-slate-600">&middot;</span>
-              <span>Receipts by upload, email, or WhatsApp</span>
+              <span>Receipts by upload or email</span>
             </div>
           </section>
 

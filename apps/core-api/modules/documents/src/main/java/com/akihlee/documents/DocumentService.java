@@ -103,9 +103,9 @@ public class DocumentService {
         saved = documentRepository.save(saved);
         publishDocumentReceived(saved);
 
-        // actorUserId/Email are null for webhook-originated uploads (WhatsApp/
-        // email) — those requests never go through JwtAuthenticationFilter, so
-        // there's no authenticated user to attribute the upload to.
+        // actorUserId/Email are null for webhook-originated uploads (email) —
+        // those requests never go through TenantContextFilter, so there's no
+        // authenticated user to attribute the upload to.
         auditLogService.log(tenantId, currentUserId(), currentUserEmail(),
                 AuditAction.DOCUMENT_UPLOAD, "DOCUMENT", saved.getId().toString(), filename);
 

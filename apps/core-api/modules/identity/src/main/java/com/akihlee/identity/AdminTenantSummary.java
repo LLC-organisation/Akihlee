@@ -4,7 +4,7 @@ import java.util.UUID;
 
 /**
  * Minimal tenant projection for admin tooling (e.g. the audit log's tenant
- * picker) — deliberately excludes WhatsApp/Square credentials that
+ * picker) — deliberately excludes Square/QuickBooks credentials that
  * TenantResponse carries, since this is a pick-a-tenant-by-name/id search,
  * not a tenant settings view.
  */

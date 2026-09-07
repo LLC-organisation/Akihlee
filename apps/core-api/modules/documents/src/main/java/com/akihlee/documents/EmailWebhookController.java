@@ -63,10 +63,9 @@ public class EmailWebhookController {
 
     /**
      * The secret is part of the path (rather than a header) because inbound-
-     * parse providers generally don't support custom request signing the
-     * way WhatsApp's verify-token handshake does — this is the equivalent
-     * lightweight protection against strangers finding and posting to this
-     * endpoint.
+     * parse providers generally don't support custom request signing — this
+     * is the lightweight protection against strangers finding and posting
+     * to this endpoint instead.
      */
     @PostMapping("/{secret}")
     public ResponseEntity<Void> receive(

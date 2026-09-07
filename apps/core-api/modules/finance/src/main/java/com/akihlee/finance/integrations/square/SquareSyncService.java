@@ -138,8 +138,8 @@ public class SquareSyncService {
         transactionRepository.save(transaction);
 
         // Bridge into the same reviewable Document/ExtractedData pipeline as
-        // uploaded/emailed/WhatsApp receipts — there's no real file behind a
-        // Square payment, so this skips storage and the OCR queue entirely.
+        // uploaded/emailed receipts — there's no real file behind a Square
+        // payment, so this skips storage and the OCR queue entirely.
         Document document = documentService.createFromExternalData(
                 tenantId,
                 Document.DocumentSource.SQUARE,

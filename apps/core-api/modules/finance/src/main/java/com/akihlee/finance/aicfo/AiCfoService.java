@@ -253,7 +253,7 @@ public class AiCfoService {
                         .temperature(0.4f)
                         .build());
         // Guardrail is optional-until-configured, same pattern as
-        // Square/Twilio/Email elsewhere in application.yml — a blank
+        // Square/Email elsewhere in application.yml — a blank
         // guardrail-id (e.g. local dev) just skips it rather than failing.
         if (guardrailId != null && !guardrailId.isBlank()) {
             requestBuilder.guardrailConfig(GuardrailConfiguration.builder()

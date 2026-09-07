@@ -19,9 +19,6 @@ dependencies {
     // For publishing document-received events to the OCR worker
     implementation("com.google.cloud:google-cloud-pubsub:1.151.0")
 
-    // For sending/receiving WhatsApp messages via Twilio
-    implementation("com.twilio.sdk:twilio:10.9.2")
-
     // PostgreSQL
     runtimeOnly("org.postgresql:postgresql")
 

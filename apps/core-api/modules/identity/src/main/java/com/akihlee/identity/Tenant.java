@@ -30,10 +30,6 @@ public class Tenant {
     @Column(nullable = false)
     private boolean active = true;
 
-    // Digits only (no "+"), matching WhatsApp Cloud API's wire format for
-    // the "from" field, so incoming webhook messages can be matched directly.
-    @Column(name = "whatsapp_phone_number", unique = true)
-    private String whatsappPhoneNumber;
 
     // Populated once this tenant completes Square's OAuth flow (see
     // SquareOAuthService) — null means "not connected via OAuth", in which
@@ -119,14 +115,6 @@ public class Tenant {
         this.updatedAt = Instant.now();
     }
 
-    public String getWhatsappPhoneNumber() {
-        return whatsappPhoneNumber;
-    }
-
-    public void setWhatsappPhoneNumber(String whatsappPhoneNumber) {
-        this.whatsappPhoneNumber = whatsappPhoneNumber;
-        this.updatedAt = Instant.now();
-    }
 
     public boolean isSquareConnected() {
         return squareAccessToken != null;
