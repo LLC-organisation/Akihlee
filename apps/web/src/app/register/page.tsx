@@ -40,10 +40,13 @@ export default function RegisterPage() {
         },
       });
       if (signUpError) {
+        const message = signUpError.message.toLowerCase();
         setError(
-          signUpError.message.toLowerCase().includes('registered')
+          message.includes('registered')
             ? 'An account with that email already exists. Try logging in instead.'
-            : 'Please check your details and try again.'
+            : message.includes('rate limit')
+              ? 'Too many signups right now — please wait a few minutes and try again.'
+              : 'Please check your details and try again.'
         );
         return;
       }

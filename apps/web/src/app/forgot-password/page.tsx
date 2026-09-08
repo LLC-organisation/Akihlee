@@ -22,7 +22,11 @@ export default function ForgotPasswordPage() {
       // registered accounts), so a request error here is a real failure
       // (bad request, rate limit), not "no such account".
       if (resetError) {
-        setError('Something went wrong. Please try again.');
+        setError(
+          resetError.message.toLowerCase().includes('rate limit')
+            ? 'Too many reset requests right now — please wait a few minutes and try again.'
+            : 'Something went wrong. Please try again.'
+        );
         return;
       }
       setSent(true);
