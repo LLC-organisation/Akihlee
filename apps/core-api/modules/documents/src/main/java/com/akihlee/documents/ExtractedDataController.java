@@ -88,6 +88,16 @@ public class ExtractedDataController {
         Document document = documentRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found"));
 
+        // A user may have cancelled this document (see DocumentService.cancel)
+        // while extraction was still in flight — a late callback landing
+        // after that must not resurrect it back to EXTRACTED/REVIEW_REQUIRED,
+        // silently undoing the cancellation. Same no-op-if-already-past-
+        // PROCESSING reasoning as updateProcessingStage below.
+        if (document.getStatus() != Document.DocumentStatus.UPLOADED
+                && document.getStatus() != Document.DocumentStatus.PROCESSING) {
+            return ResponseEntity.ok().build();
+        }
+
         ExtractedData data = extractedDataRepository.findByDocumentId(id)
                 .orElseGet(() -> new ExtractedData(id, document.getTenantId(), document.getFilename()));
 

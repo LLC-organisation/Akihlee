@@ -62,6 +62,17 @@ public class DocumentController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
+    /**
+     * Cancels a document stuck at UPLOADED/PROCESSING (e.g. document-worker
+     * never called back) — see DocumentService.cancel.
+     */
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<Document> cancel(@PathVariable UUID id) {
+        return documentService.cancel(id)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
         return documentService.delete(id)

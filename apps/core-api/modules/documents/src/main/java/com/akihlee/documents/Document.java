@@ -158,7 +158,14 @@ public class Document {
         EXTRACTED,
         REVIEW_REQUIRED,
         APPROVED,
-        REJECTED
+        REJECTED,
+        // A user gave up waiting on a document stuck at UPLOADED/PROCESSING
+        // (e.g. document-worker never called back) — see
+        // DocumentService.cancel. Deliberately distinct from REJECTED,
+        // which means a human reviewed the extracted data and declined it;
+        // CANCELLED means extraction never finished at all, so conflating
+        // the two would corrupt "rejected" as a review-outcome filter.
+        CANCELLED
     }
 
     public enum DocumentSource {

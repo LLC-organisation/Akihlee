@@ -18,6 +18,7 @@ public final class AuditAction {
     public static final String DOCUMENT_STATUS_CHANGE = "DOCUMENT_STATUS_CHANGE";
     public static final String DOCUMENT_APPROVED = "DOCUMENT_APPROVED";
     public static final String DOCUMENT_REJECTED = "DOCUMENT_REJECTED";
+    public static final String DOCUMENT_CANCELLED = "DOCUMENT_CANCELLED";
     public static final String DOCUMENT_IMPORTED = "DOCUMENT_IMPORTED";
     public static final String DOCUMENT_DELETED = "DOCUMENT_DELETED";
     public static final String EXTRACTED_DATA_EDITED = "EXTRACTED_DATA_EDITED";

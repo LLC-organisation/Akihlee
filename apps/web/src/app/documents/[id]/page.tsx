@@ -957,6 +957,24 @@ export default function DocumentDetailPage({ params }: { params: { id: string } 
     }
   };
 
+  // For a document stuck at UPLOADED/PROCESSING — e.g. document-worker
+  // never called back. load() (not just setDoc) so the page leaves the
+  // "still processing" card and settles into the normal not-extracted
+  // state right away, rather than waiting up to 2s for the next poll.
+  const handleCancel = async () => {
+    if (!doc) return;
+    setActioning(true);
+    setActionError(null);
+    try {
+      await documentsApi.cancel(doc.id);
+      await load();
+    } catch {
+      setActionError('Could not cancel. Try again.');
+    } finally {
+      setActioning(false);
+    }
+  };
+
   if (!checkedAuth) return null;
 
   return (
@@ -1056,15 +1074,38 @@ export default function DocumentDetailPage({ params }: { params: { id: string } 
 
                 <div className="lg:col-span-3 space-y-6">
 
-              {notExtractedYet && (
+              {/* notExtractedYet (no ExtractedData row yet) stays true forever
+                  for a cancelled document — there's nothing else that would
+                  ever create one — so this branches on doc.status rather
+                  than showing a permanently stale "still processing" card. */}
+              {notExtractedYet && doc?.status === 'CANCELLED' && (
+                <div className={`${cardClasses} p-6 text-center text-slate-500 dark:text-slate-400`}>
+                  Cancelled — extraction was stopped before it finished.
+                </div>
+              )}
+
+              {notExtractedYet && doc?.status !== 'CANCELLED' && (
                 <div className={`${cardClasses} p-6 text-center`}>
                   <div className="flex items-center justify-center gap-2 text-slate-500 dark:text-slate-400">
                     <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin shrink-0" />
                     <p>{(processingDoc && documentProcessingStageLabel(processingDoc)) || 'Still being processed — extracted data will appear here once OCR finishes.'}</p>
                   </div>
-                  <button onClick={load} className={`${primaryButtonClasses} mt-4`}>
-                    Refresh
-                  </button>
+                  {actionError && (
+                    <p className="text-sm text-red-600 dark:text-red-400 mt-3">{actionError}</p>
+                  )}
+                  <div className="flex items-center justify-center gap-3 mt-4">
+                    <button onClick={load} className={primaryButtonClasses}>
+                      Refresh
+                    </button>
+                    <button
+                      onClick={handleCancel}
+                      disabled={actioning}
+                      className="px-4 py-2.5 text-sm font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors duration-200 disabled:opacity-50"
+                      title="Give up waiting on this document — it'll be marked cancelled instead of staying stuck"
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
               )}
 

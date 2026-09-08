@@ -38,6 +38,14 @@ public class DocumentService {
     private static final Set<Document.DocumentStatus> REVIEWABLE_STATUSES =
             EnumSet.of(Document.DocumentStatus.EXTRACTED, Document.DocumentStatus.REVIEW_REQUIRED);
 
+    // The only statuses a document can be "stuck" in — waiting on
+    // document-worker to either pick it up or call back. Once it reaches
+    // EXTRACTED/REVIEW_REQUIRED, extraction succeeded and cancel no longer
+    // applies (reject does); once APPROVED/REJECTED/CANCELLED, it's
+    // already terminal.
+    private static final Set<Document.DocumentStatus> CANCELLABLE_STATUSES =
+            EnumSet.of(Document.DocumentStatus.UPLOADED, Document.DocumentStatus.PROCESSING);
+
     private final DocumentRepository documentRepository;
     private final ExtractedDataRepository extractedDataRepository;
     private final BankTransactionRepository bankTransactionRepository;
@@ -168,15 +176,38 @@ public class DocumentService {
      */
     @Transactional
     public Optional<Document> approve(UUID id) {
-        return transitionAfterReview(id, Document.DocumentStatus.APPROVED, AuditAction.DOCUMENT_APPROVED, null);
+        return transitionStatus(id, Document.DocumentStatus.APPROVED, REVIEWABLE_STATUSES,
+                "extracted and pending review", AuditAction.DOCUMENT_APPROVED, null);
     }
 
     @Transactional
     public Optional<Document> reject(UUID id, String reason) {
-        return transitionAfterReview(id, Document.DocumentStatus.REJECTED, AuditAction.DOCUMENT_REJECTED, reason);
+        return transitionStatus(id, Document.DocumentStatus.REJECTED, REVIEWABLE_STATUSES,
+                "extracted and pending review", AuditAction.DOCUMENT_REJECTED, reason);
     }
 
-    private Optional<Document> transitionAfterReview(UUID id, Document.DocumentStatus newStatus, String action, String reason) {
+    /**
+     * Cancels a document stuck at UPLOADED/PROCESSING — e.g. document-worker
+     * never picked it up, or crashed before calling back — giving a user a
+     * way out instead of it sitting unresolved forever. Rejects (409) a
+     * document that's already past that point: extraction either already
+     * succeeded (nothing to cancel — reject applies instead) or the
+     * document already reached a terminal state.
+     *
+     * A late document-worker callback arriving after this can't resurrect
+     * the document — see ExtractedDataController.receiveExtraction, which
+     * only applies an extraction result while status is still
+     * UPLOADED/PROCESSING.
+     */
+    @Transactional
+    public Optional<Document> cancel(UUID id) {
+        return transitionStatus(id, Document.DocumentStatus.CANCELLED, CANCELLABLE_STATUSES,
+                "still uploading or processing", AuditAction.DOCUMENT_CANCELLED, null);
+    }
+
+    private Optional<Document> transitionStatus(UUID id, Document.DocumentStatus newStatus,
+            Set<Document.DocumentStatus> allowedFromStatuses, String allowedStatusDescription,
+            String action, String reason) {
         UUID tenantId = TenantContext.getCurrentTenantId();
         Optional<Document> found = documentRepository.findByIdAndTenantId(id, tenantId);
         if (found.isEmpty()) {
@@ -184,9 +215,9 @@ public class DocumentService {
         }
 
         Document document = found.get();
-        if (!REVIEWABLE_STATUSES.contains(document.getStatus())) {
+        if (!allowedFromStatuses.contains(document.getStatus())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Document must be extracted and pending review before it can be " + newStatus.name().toLowerCase());
+                    "Document must be " + allowedStatusDescription + " before it can be " + newStatus.name().toLowerCase());
         }
 
         document.updateStatus(newStatus);

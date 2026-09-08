@@ -54,7 +54,7 @@ export type Document = {
   storageKey: string;
   contentType: string;
   sizeBytes: number;
-  status: 'UPLOADED' | 'PROCESSING' | 'EXTRACTED' | 'REVIEW_REQUIRED' | 'APPROVED' | 'REJECTED';
+  status: 'UPLOADED' | 'PROCESSING' | 'EXTRACTED' | 'REVIEW_REQUIRED' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
   source: 'UPLOAD' | 'EMAIL' | 'WHATSAPP' | 'SQUARE' | 'QUICKBOOKS';
   // "REDACTING" | "EXTRACTING" | null — a finer-grained progress signal
   // document-worker reports while status is still PROCESSING. Always null
@@ -505,6 +505,12 @@ export const documentsApi = {
 
   reject: async (id: string, reason: string | null): Promise<Document> => {
     const response = await apiClient.post<Document>(`/documents/${id}/reject`, { reason });
+    return response.data;
+  },
+
+  /** Cancels a document stuck at UPLOADED/PROCESSING. */
+  cancel: async (id: string): Promise<Document> => {
+    const response = await apiClient.post<Document>(`/documents/${id}/cancel`);
     return response.data;
   },
 
