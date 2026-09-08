@@ -9,6 +9,7 @@ import { AppSidebar } from '@/components/AppSidebar';
 import { FinancialAnalyticsOverview } from '@/components/FinancialAnalyticsOverview';
 import { VolatilityOverview } from '@/components/VolatilityOverview';
 import { AiCfoChatWidget } from '@/components/AiCfoChatWidget';
+import { documentProcessingStageLabel } from '@/lib/hooks/useDocumentProcessing';
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB, matches the backend's configured limit
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'application/pdf'];
@@ -141,7 +142,11 @@ export default function Dashboard() {
   const [listError, setListError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  // Tracks the most recently uploaded document so its live processing
+  // stage (redacting/extracting) can be shown instead of a static message.
+  // Kept in sync by the existing in-flight-documents poll below rather
+  // than a second, redundant polling loop.
+  const [uploadedDocId, setUploadedDocId] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'NEEDS_REVIEW' | 'APPROVED' | 'REJECTED'>('ALL');
@@ -181,6 +186,13 @@ export default function Dashboard() {
 
   const hasInFlightDocuments = documents.some((d) => d.status === 'UPLOADED' || d.status === 'PROCESSING');
 
+  // Kept in sync by the in-flight-documents poll above, not a separate
+  // fetch — this doc is always already covered by that poll once uploaded.
+  const uploadedDoc = uploadedDocId ? documents.find((d) => d.id === uploadedDocId) ?? null : null;
+  const uploadStatusMessage = uploadedDoc
+    ? documentProcessingStageLabel(uploadedDoc) ?? `${uploadedDoc.filename} is ready — check the Extracted Data page.`
+    : null;
+
   useEffect(() => {
     if (!checkedAuth || !hasInFlightDocuments) return;
     const intervalId = setInterval(refreshDocumentsSilently, 5000);
@@ -188,8 +200,8 @@ export default function Dashboard() {
   }, [checkedAuth, hasInFlightDocuments, refreshDocumentsSilently]);
 
   const uploadFile = async (file: File) => {
-    setUploadSuccess(null);
     setUploadError(null);
+    setUploadedDocId(null);
 
     if (!ACCEPTED_TYPES.includes(file.type)) {
       setUploadError('Unsupported file type. Please upload a PNG, JPG, or PDF.');
@@ -204,7 +216,7 @@ export default function Dashboard() {
     try {
       const uploaded = await documentsApi.upload(file);
       setDocuments((prev) => [uploaded, ...prev]);
-      setUploadSuccess(`${file.name} uploaded successfully. It's being processed — check the Extracted Data page shortly.`);
+      setUploadedDocId(uploaded.id);
     } catch {
       setUploadError('Upload failed. Please try again.');
     } finally {
@@ -295,12 +307,19 @@ export default function Dashboard() {
                   {uploadError}
                 </div>
               )}
-              {uploadSuccess && (
+              {uploadStatusMessage && (
                 <div
                   role="status"
-                  className="mb-3 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs px-3 py-2 break-words"
+                  className={`mb-3 rounded-lg border text-xs px-3 py-2 break-words flex items-center gap-2 ${
+                    uploadedDoc?.status === 'PROCESSING'
+                      ? 'bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/20 text-blue-700 dark:text-blue-400'
+                      : 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                  }`}
                 >
-                  {uploadSuccess}
+                  {uploadedDoc?.status === 'PROCESSING' && (
+                    <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin shrink-0" />
+                  )}
+                  {uploadStatusMessage}
                 </div>
               )}
 

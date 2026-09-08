@@ -56,6 +56,10 @@ export type Document = {
   sizeBytes: number;
   status: 'UPLOADED' | 'PROCESSING' | 'EXTRACTED' | 'REVIEW_REQUIRED' | 'APPROVED' | 'REJECTED';
   source: 'UPLOAD' | 'EMAIL' | 'WHATSAPP' | 'SQUARE' | 'QUICKBOOKS';
+  // "REDACTING" | "EXTRACTING" | null — a finer-grained progress signal
+  // document-worker reports while status is still PROCESSING. Always null
+  // once status moves on; see documentProcessingStageLabel.
+  processingStage: string | null;
   createdAt: string;
 };
 

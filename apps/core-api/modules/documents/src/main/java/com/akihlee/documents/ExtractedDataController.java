@@ -140,6 +140,32 @@ public class ExtractedDataController {
     }
 
     /**
+     * Best-effort progress signal from document-worker while a document is
+     * still PROCESSING — lets the frontend show "Redacting personal
+     * information..." / "Extracting data..." instead of a static "still
+     * processing, check back later" message. Silently a no-op if the
+     * document has already reached a terminal state (e.g. the final
+     * extraction callback won a race against this update) — the worker
+     * doesn't track document status itself, so it can't know that in advance.
+     */
+    @PostMapping("/api/v1/internal/documents/{id}/processing-stage")
+    public ResponseEntity<Void> updateProcessingStage(
+            @PathVariable UUID id,
+            @RequestHeader("X-Internal-Api-Key") String apiKey,
+            @RequestBody DocumentProcessingStageRequest request) {
+        if (!internalApiKey.equals(apiKey)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        documentRepository.findById(id).ifPresent(document -> {
+            if (document.getStatus() == Document.DocumentStatus.PROCESSING) {
+                document.setProcessingStage(request.stage());
+                documentRepository.save(document);
+            }
+        });
+        return ResponseEntity.ok().build();
+    }
+
+    /**
      * Paginated, tenant-scoped view of everything the OCR pipeline has
      * extracted so far — the data the AI CFO features will read from.
      */

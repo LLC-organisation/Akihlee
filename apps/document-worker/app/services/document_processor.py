@@ -75,7 +75,8 @@ class DocumentProcessor:
 
         try:
             with TemporaryDirectory() as tmpdir:
-                image_paths, pii_token_map = self._download_and_prepare_images(event, Path(tmpdir))
+                image_paths, pii_token_map = await self._download_and_prepare_images(event, Path(tmpdir))
+                await self._report_stage(document_id, "EXTRACTING")
                 result = await self._extract(image_paths)
 
             status = (
@@ -137,7 +138,7 @@ class DocumentProcessor:
         result["extraction_method"] = "regex"
         return _validate_and_reconcile_statement(result)
 
-    def _download_and_prepare_images(self, event: dict, tmpdir: Path) -> tuple[list[Path], dict[str, str]]:
+    async def _download_and_prepare_images(self, event: dict, tmpdir: Path) -> tuple[list[Path], dict[str, str]]:
         """Downloads the source file and returns (image paths Tesseract/the
         vision model can read, PII token map).
 
@@ -162,6 +163,7 @@ class DocumentProcessor:
         pii_token_map: dict[str, str] = {}
         if content_type == "application/pdf" or suffix.lower() == ".pdf":
             if settings.PII_REDACTION_ENABLED:
+                await self._report_stage(event.get("document_id"), "REDACTING")
                 redacted_path = tmpdir / "source_redacted.pdf"
                 try:
                     pii_token_map = redact_pdf(str(source_path), str(redacted_path))
@@ -183,6 +185,22 @@ class DocumentProcessor:
             return image_paths, pii_token_map
 
         return [source_path], pii_token_map
+
+    async def _report_stage(self, document_id: str, stage: str) -> None:
+        """Best-effort progress signal ("REDACTING" | "EXTRACTING") for the
+        frontend's live processing indicator — never lets a failed report
+        block or fail actual document processing, which is the one thing
+        that actually matters here.
+        """
+        try:
+            response = await self.http_client.post(
+                f"{settings.CORE_API_URL}/api/v1/internal/documents/{document_id}/processing-stage",
+                json={"stage": stage},
+                headers={"X-Internal-Api-Key": settings.INTERNAL_API_KEY},
+            )
+            response.raise_for_status()
+        except Exception as e:
+            logger.warning(f"Failed to report processing stage {stage!r} for document {document_id}: {e}")
 
     async def _send_callback(self, document_id: str, result: dict, status: str, pii_token_map: dict[str, str]) -> None:
         payload = {

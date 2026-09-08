@@ -21,6 +21,14 @@ const CONTENT_SECURITY_POLICY = [
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   `connect-src 'self' ${API_ORIGIN}${SUPABASE_ORIGIN ? ` ${SUPABASE_ORIGIN}` : ''}`,
+  // The document review page previews an uploaded PDF in an <iframe> whose
+  // src is a blob: URL (the file is fetched with an auth header, then
+  // rendered via URL.createObjectURL — a plain <iframe src="/api/..."> URL
+  // can't carry that header). Without this, frame-src falls back to
+  // default-src 'self', which doesn't cover the blob: scheme, so every PDF
+  // preview was silently blocked — img-src already listed blob: for the
+  // image-file case, this is the same fix for the PDF case.
+  "frame-src 'self' blob:",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

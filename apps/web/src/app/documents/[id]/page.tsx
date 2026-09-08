@@ -17,6 +17,7 @@ import {
   AnomalyAlert,
 } from '@/lib/api-client';
 import { useRequireAuth } from '@/lib/use-auth';
+import { useDocumentProcessing, documentProcessingStageLabel } from '@/lib/hooks/useDocumentProcessing';
 import { AppSidebar } from '@/components/AppSidebar';
 import { StatusBadge } from '@/components/StatusBadge';
 import { SourceBadge } from '@/components/SourceBadge';
@@ -765,6 +766,15 @@ export default function DocumentDetailPage({ params }: { params: { id: string } 
     if (checkedAuth) load();
   }, [checkedAuth, load]);
 
+  // Only polls while we're actually waiting on extraction — once
+  // notExtractedYet flips false there's real data to show instead.
+  const processingDoc = useDocumentProcessing(notExtractedYet ? documentId : null);
+  useEffect(() => {
+    if (notExtractedYet && processingDoc && processingDoc.status !== 'UPLOADED' && processingDoc.status !== 'PROCESSING') {
+      load(); // extraction just finished — fetch the now-available data
+    }
+  }, [notExtractedYet, processingDoc, load]);
+
   // A plain <img src> can't carry the JWT and the endpoint isn't public, so
   // the original file is fetched as a blob and rendered via an object URL.
   // Never fetched for Square-sourced documents — there's no real file.
@@ -1048,9 +1058,10 @@ export default function DocumentDetailPage({ params }: { params: { id: string } 
 
               {notExtractedYet && (
                 <div className={`${cardClasses} p-6 text-center`}>
-                  <p className="text-slate-500 dark:text-slate-400">
-                    Still being processed — extracted data will appear here once OCR finishes.
-                  </p>
+                  <div className="flex items-center justify-center gap-2 text-slate-500 dark:text-slate-400">
+                    <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin shrink-0" />
+                    <p>{(processingDoc && documentProcessingStageLabel(processingDoc)) || 'Still being processed — extracted data will appear here once OCR finishes.'}</p>
+                  </div>
                   <button onClick={load} className={`${primaryButtonClasses} mt-4`}>
                     Refresh
                   </button>
