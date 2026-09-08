@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
@@ -94,10 +95,16 @@ public class SecurityConfig {
      * JWKS (signature + expiry), plus an explicit issuer check — Supabase
      * owns credential/session management now, this app just trusts its
      * tokens (see SupabaseJwtAuthenticationConverter for what happens next).
+     *
+     * NimbusJwtDecoder.withJwkSetUri(...) trusts only RS256 by default —
+     * Supabase signs with ES256, so every token would otherwise fail
+     * verification as "unsupported algorithm" even with a matching key.
      */
     @Bean
     public JwtDecoder jwtDecoder() {
-        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(supabaseJwksUri).build();
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(supabaseJwksUri)
+                .jwsAlgorithm(SignatureAlgorithm.ES256)
+                .build();
         decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(supabaseIssuer));
         return decoder;
     }
