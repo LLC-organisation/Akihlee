@@ -37,7 +37,14 @@ class DocumentProcessor:
             aws_access_key_id=settings.S3_ACCESS_KEY,
             aws_secret_access_key=settings.S3_SECRET_KEY,
         )
-        self.http_client = httpx.AsyncClient(timeout=10.0)
+        # 30s, not 10s — this client posts the extraction callback to
+        # core-api, which can be a cold JVM (a fresh Flyway migration in
+        # particular adds real startup time) right after a shared deploy;
+        # a too-tight timeout here previously produced two back-to-back
+        # httpx timeout exceptions (primary callback, then the fallback
+        # failure-report) with no useful message in the logs, leaving a
+        # document stuck at PROCESSING with zero diagnostic trail.
+        self.http_client = httpx.AsyncClient(timeout=30.0)
 
     async def aclose(self):
         """Close shared clients on shutdown."""
@@ -83,7 +90,11 @@ class DocumentProcessor:
             )
 
         except Exception as e:
-            logger.error(f"Error processing document {document_id}: {e}")
+            # Some exceptions (notably httpx's timeout classes) stringify
+            # to "" — logger.exception's traceback plus the type name are
+            # what actually make a failure diagnosable when that happens,
+            # rather than a log line with nothing useful after the colon.
+            logger.exception(f"Error processing document {document_id}: {type(e).__name__}: {e}")
             # Best-effort: let the user see it needs manual review rather
             # than leaving it stuck at PROCESSING forever.
             try:
@@ -97,8 +108,11 @@ class DocumentProcessor:
                     "REVIEW_REQUIRED",
                     {},
                 )
-            except Exception:
-                logger.error(f"Also failed to report failure for document {document_id}")
+            except Exception as fallback_error:
+                logger.exception(
+                    f"Also failed to report failure for document {document_id}: "
+                    f"{type(fallback_error).__name__}: {fallback_error}"
+                )
 
     async def _extract(self, image_paths: list[Path]) -> dict:
         """Vision LLM primary (if configured), regex/Tesseract fallback otherwise
