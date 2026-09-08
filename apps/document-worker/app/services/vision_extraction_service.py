@@ -192,15 +192,64 @@ transaction list on a long statement,
 Known vendor/payee name patterns — treat these as strong priors for categoryTag/category (and for a \
 bank transaction's type) whenever the payee or description clearly matches one, since a recognized \
 vendor name is more reliable than judging from amount/context alone. Still use your own judgment if \
-the actual page content clearly contradicts one (e.g. a refund from a normally-expense vendor):
-- "Toast", "Square", "Clover" (a POS payout landing in the account) -> type INCOME, category \
-"Payment Processor Payout"
-- "DoorDash", "UberEats", "Uber Eats", "Grubhub", "Postmates" -> type INCOME, category \
-"Delivery Platform Revenue"
-- "Sysco", "US Foods", "Restaurant Depot" -> type EXPENSE, category "Inventory & Raw Materials"
-- "Gusto", "ADP", "Paychex" -> type EXPENSE, category "Payroll & Personnel"
-- A utility or realty company (electric, gas, water, internet, rent) -> type EXPENSE, category \
-"Utilities & Rent"
+the actual page content clearly contradicts one (e.g. a refund from a normally-expense vendor), and \
+prefer a more specific match over a more general one when both could apply (e.g. "Restaurant Depot" \
+is Inventory & Raw Materials, not the general Office Supplies & Equipment "depot" pattern below):
+- "Toast", "Square", "Clover" as a payout landing IN the account -> type INCOME, category \
+"Payment Processor Payout". The same names can also appear as the PROCESSOR behind an outgoing card \
+purchase at some other business (see the POS-prefix rules below) — that's a different direction \
+(EXPENSE), not this entry,
+- "DoorDash", "UberEats", "Uber Eats", "Grubhub", "Postmates" as a payout landing IN the account -> \
+type INCOME, category "Delivery Platform Revenue". The same names as an outgoing purchase (the \
+business ordering food) -> type EXPENSE, category "Meals & Entertainment" instead,
+- "Sysco", "US Foods", "Restaurant Depot", "Wholesale", "Food Service", "Produce", "Distributor", \
+"Packaging", "Ingredients", "Beauty Supply", "Cosmetics" -> type EXPENSE, category \
+"Inventory & Raw Materials",
+- "Gusto", "ADP", "Paychex" -> type EXPENSE, category "Payroll & Personnel",
+- A restaurant/cafe-shaped name — "Burger", "Cafe", "Coffee", "Restaurant", "Diner", "Pizza", "Taco", \
+"Burrito", "Grill", "Bakery", "Deli", "Bar", "Pub", "Kitchen", "Eatery", or a general "Entertainment" \
+line -> type EXPENSE, category "Meals & Entertainment",
+- "Uber Trip", "Uber Pass", "Lyft", "Taxi", a gas-station brand (Chevron, Shell, Exxon, etc.) or \
+"Gas Station", "Parking", a city parking-payment service (e.g. "Cityofsac-Offstreetpay"), "Flight", \
+an airline name, "DMV", "Car Rental", "Transit" -> type EXPENSE, category "Travel & Transportation". \
+Don't match a bare "Gas" alone here — that collides with a "Gas & Electric" utility bill (see below); \
+only a gas-station brand or the explicit phrase "gas station" counts,
+- "Amazon"/"Amzn", "Temu", "Walmart", "Target", a bookstore, "Hardware", a general (non-restaurant) \
+"Depot", "Staples", "Best Buy" -> type EXPENSE, category "Office Supplies & Equipment". This is a \
+broad catch-all by design (these retailers sell almost anything) — if page context clearly shows the \
+purchase is actually inventory/raw materials or something else more specific, prefer that instead,
+- "McAfee", a hosting provider, "SaaS", "Antivirus", or another recognizable software/IT subscription \
+-> type EXPENSE, category "Software & IT Services" (not "Professional Services" — that's reserved for \
+non-software professional/consulting spend below),
+- "WorldRemit", "Remitly", a wire transfer, "Coursera", "Consulting", "Legal", "Freelance", "Agency", \
+"Upwork", "Fiverr" -> type EXPENSE, category "Professional Services",
+- "Properties", "Realty", "Rent", "Lease", "Electric", "Gas & Electric", "PG&E", "Water", "Waste \
+Management", "Telecom", "Internet", "AT&T" -> type EXPENSE, category "Utilities & Rent",
+- A bare cash "Withdrawal" or "ATM" line with no other merchant detail -> category "Uncategorized" \
+unless the page otherwise ties it to a specific identifiable expense — a cash withdrawal's actual use \
+generally can't be determined from the statement alone, so don't guess a category for it.
+
+POS/aggregator/app-store billing prefixes — these precede the REAL merchant or app name rather than \
+being a merchant in their own right, so read past the prefix instead of categorizing the prefix text \
+itself:
+- "Tst*" (Toast POS) prefixing an outgoing purchase, e.g. "Tst* Tastea - Delta Sho" -> Toast is \
+food-only POS in practice, so this is confidently type EXPENSE, category "Meals & Entertainment" \
+regardless of the specific name that follows,
+- "Sq *" (Square) prefixing an outgoing purchase, e.g. "Sq *Speedy Burrito Mexi" -> Square is a \
+general-purpose POS (not food-specific), so classify the trailing merchant name on its own merits — \
+here, "Speedy Burrito" -> Meals & Entertainment via the restaurant-shaped-name rule above,
+- "Google *" / "Apple *" prefixing an outgoing purchase, e.g. "Google *Bumble" or "Apple.Com/Bill" -> \
+this is app-store billing for the trailing app/subscription name; classify that name on its own \
+merits (e.g. a recognizable productivity/software app -> "Software & IT Services") rather than \
+assuming a fixed category — an app name alone often isn't a reliable category signal (a dating-app \
+subscription isn't a meal), so use "Uncategorized" if the specific app doesn't clearly fit anything.
+
+Cross-industry notes (statement style varies a lot — apply whichever of these fits the document at hand):
+- Restaurant/food-service statements: standardize known food distributors (Sysco, US Foods, etc.) to \
+"Inventory & Raw Materials"; POS software fees and delivery-platform commissions to \
+"Professional Services" or "Software & IT Services" as appropriate, not "Inventory & Raw Materials".
+- Retail/cosmetics statements: raw cosmetic ingredients, packaging, and bulk supply purchases -> \
+"Inventory & Raw Materials"; store fixtures/displays/equipment -> "Office Supplies & Equipment".
 
 Rules:
 - If a field cannot be determined, use null (or an empty array for list fields) rather than guessing.

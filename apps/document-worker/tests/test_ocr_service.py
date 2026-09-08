@@ -257,6 +257,86 @@ class TestVendorCategory:
         transactions = OCRService._extract_bank_transactions(lines)
         assert transactions[0]["category"] == "Payroll & Personnel"
 
+    def test_travel_and_transportation_keywords(self):
+        # Cityofsac-Offstreetpay and DMV are pulled directly from a real
+        # statement's transaction table.
+        assert OCRService._vendor_category("Uber Trip Help.Uber.Com", is_expense=True) == "Travel & Transportation"
+        assert OCRService._vendor_category("Cityofsac-Offstreetpay Sacramento CA", is_expense=True) == "Travel & Transportation"
+        assert OCRService._vendor_category("Fd *CA Dmv 520 Chico CA", is_expense=True) == "Travel & Transportation"
+        assert OCRService._vendor_category("Chevron Gas Station #4021", is_expense=True) == "Travel & Transportation"
+
+    def test_bare_gas_does_not_collide_with_utility_gas_and_electric(self):
+        # A bare "gas" keyword would misroute a "Gas & Electric" utility
+        # bill to Travel — only a gas-station brand or the explicit "gas
+        # station" phrase should trigger Travel & Transportation.
+        assert OCRService._vendor_category("PG&E Gas & Electric Bill", is_expense=True) == "Utilities & Rent"
+        assert OCRService._vendor_category("Monthly Gas Bill", is_expense=True) is None
+
+    def test_office_supplies_keywords(self):
+        assert OCRService._vendor_category("Amzn Mktp US*T35500E Amzn.Com/Bill", is_expense=True) == "Office Supplies & Equipment"
+        assert OCRService._vendor_category("Walmart.Com 800-966-6546", is_expense=True) == "Office Supplies & Equipment"
+        assert OCRService._vendor_category("Butte College Bookstore", is_expense=True) == "Office Supplies & Equipment"
+
+    def test_restaurant_depot_is_inventory_not_office_supplies(self):
+        # Entry-order precedence: "Restaurant Depot" must match the more
+        # specific Inventory & Raw Materials pattern, not the general bare
+        # "depot" pattern under Office Supplies & Equipment.
+        assert OCRService._vendor_category("ACH Debit Restaurant Depot", is_expense=True) == "Inventory & Raw Materials"
+        assert OCRService._vendor_category("Card Purchase Office Depot", is_expense=True) == "Office Supplies & Equipment"
+
+    def test_software_and_it_services_keywords(self):
+        # McAfee routes to the more specific Software & IT Services
+        # category rather than the general Professional Services bucket.
+        assert OCRService._vendor_category("Mcafee *Www.Mcafee.CO 866-622-3911", is_expense=True) == "Software & IT Services"
+
+    def test_professional_services_keywords(self):
+        assert OCRService._vendor_category("Worldremit 888-772-7771 CO", is_expense=True) == "Professional Services"
+        assert OCRService._vendor_category("Coursera 650-963-9884 CA", is_expense=True) == "Professional Services"
+
+    def test_utilities_and_rent_keywords(self):
+        assert OCRService._vendor_category("Af*Hill Properties 530-893-3480", is_expense=True) == "Utilities & Rent"
+
+    def test_meals_keywords_beyond_literal_list(self):
+        # Burrito/pizza/taco/etc. extend past a bare vendor-name list —
+        # needed for a Square-prefixed merchant name like this real one.
+        assert OCRService._vendor_category("Speedy Burrito Mexi Chico CA", is_expense=True) == "Meals & Entertainment"
+
+    def test_delivery_platform_direction_dependent_category(self):
+        # Same vendor name, opposite category depending on which direction
+        # the money is actually moving.
+        assert OCRService._vendor_category("Doordash Weekly Payout", is_expense=False) == "Delivery Platform Revenue"
+        assert OCRService._vendor_category("ACH Debit Doordash Order", is_expense=True) == "Meals & Entertainment"
+
+    def test_bare_withdrawal_stays_uncategorized(self):
+        assert OCRService._vendor_category("08/28 Withdrawal", is_expense=True) is None
+
+
+class TestPosAndAppStorePrefixes:
+    def test_toast_prefix_is_always_meals_regardless_of_merchant_name(self):
+        # Toast is food-only POS — the prefix alone is enough, unlike the
+        # bare "toast"/"square"/"clover" INCOME-payout entry, which is a
+        # different direction entirely.
+        assert OCRService._vendor_category("Tst* Tastea - Delta Sho Sacramento CA", is_expense=True) == "Meals & Entertainment"
+
+    def test_toast_prefix_only_applies_to_expense_rows(self):
+        # A Toast payout landing IN the account (income) is handled by the
+        # separate bare "toast" vendor entry, not this prefix short-circuit.
+        assert OCRService._vendor_category("Tst* Settlement Deposit", is_expense=False) is None
+
+    def test_square_prefix_is_stripped_before_keyword_match(self):
+        # "Sq *" alone isn't a keyword — the merchant name after it is
+        # classified on its own merits (here, via the burrito keyword).
+        assert OCRService._vendor_category("Sq *Speedy Burrito Mexi Chico CA", is_expense=True) == "Meals & Entertainment"
+
+    def test_app_store_prefix_with_unrecognized_app_stays_uncategorized(self):
+        # A dating-app subscription has no reliable category signal on its
+        # own — this must NOT be force-categorized as Meals & Entertainment
+        # just because it's a Google/Apple billing line.
+        assert OCRService._vendor_category("Google *Bumble 855-836-3987 CA", is_expense=True) is None
+
+    def test_app_store_prefix_with_recognizable_software_name(self):
+        assert OCRService._vendor_category("Google *Mcafee Antivirus", is_expense=True) == "Software & IT Services"
+
 
 class TestExtractBankName:
     def test_skips_disclaimer_line_and_finds_bank_name(self):

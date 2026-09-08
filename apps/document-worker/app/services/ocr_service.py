@@ -110,17 +110,102 @@ _CREDIT_OVERRIDE_KEYWORD_PATTERN = re.compile(
 
 # Known vendor/payee name -> category, checked before falling back to
 # "Uncategorized" — regex/Tesseract has no real categorization ability, but
-# a handful of very common SME vendors are worth recognizing by name
-# directly. Each entry's bool is whether that vendor is an expense; see
-# _vendor_category, which only applies a match when it agrees with the
-# row's own already-detected INCOME/EXPENSE direction, so a vendor name
-# match never contradicts the sign/keyword signal that decided that.
+# a broad table of common vendor/keyword patterns across SME statement
+# styles (general business, retail, restaurants, tech, consulting) is
+# worth recognizing directly. Each entry's bool is whether that vendor is
+# an expense; see _vendor_category, which only applies a match when it
+# agrees with the row's own already-detected INCOME/EXPENSE direction, so
+# a vendor name match never contradicts the sign/keyword signal that
+# decided that. Entry ORDER matters: a more specific pattern (e.g.
+# "restaurant depot") must be checked before a more general one that would
+# otherwise also match part of it (e.g. bare "depot") — _vendor_category
+# returns on the first match, so a later, more general entry never
+# overrides an earlier, more specific one.
+#
+# Two deliberate departures from a literal vendor->category table:
+# - McAfee/hosting/SaaS route to "Software & IT Services" rather than
+#   "Professional Services" — Akihlee already has this more specific
+#   category, so lumping SaaS spend into general professional services
+#   would be a regression, not an improvement.
+# - No blanket "app subscription -> Meals & Entertainment" rule for a
+#   Google/Apple billing line (e.g. "Google *Bumble") — an app name has no
+#   reliable category signal on its own (a dating-app subscription isn't
+#   a meal), so an unrecognized one is left to fall through to
+#   Uncategorized rather than guessed at. See _vendor_category's prefix
+#   stripping below, which still classifies a *recognizable* app/merchant
+#   name after the "Google *"/"Apple *"/"Sq *" prefix.
 _VENDOR_CATEGORY_MAP: tuple[tuple[re.Pattern, bool, str], ...] = (
+    # --- INCOME (money landing in the account) ---
     (re.compile(r"\b(toast|square|clover)\b", re.IGNORECASE), False, "Payment Processor Payout"),
     (re.compile(r"\b(doordash|uber\s*eats|grubhub|postmates)\b", re.IGNORECASE), False, "Delivery Platform Revenue"),
-    (re.compile(r"\b(sysco|us\s*foods|restaurant\s*depot)\b", re.IGNORECASE), True, "Inventory & Raw Materials"),
+
+    # --- EXPENSE: Inventory & Raw Materials ---
+    # Checked before the broader bare "depot" pattern under Office
+    # Supplies below, so "Restaurant Depot" doesn't fall through to it.
+    (re.compile(
+        r"\b(sysco|us\s*foods|restaurant\s*depot|wholesale|food\s*service|produce|distributor|"
+        r"packaging|ingredients|beauty\s*supply|cosmetics)\b", re.IGNORECASE,
+    ), True, "Inventory & Raw Materials"),
+
+    # --- EXPENSE: Payroll & Personnel ---
     (re.compile(r"\b(gusto|adp|paychex)\b", re.IGNORECASE), True, "Payroll & Personnel"),
+
+    # --- EXPENSE: Meals & Entertainment ---
+    # Doordash/UberEats/Grubhub/Postmates also appear here — as an EXPENSE
+    # (a business ordering food), distinct from the INCOME payout entry
+    # above (a delivery platform paying the business out). Burrito/pizza/
+    # taco/etc. go beyond a literal vendor-name list — a real statement's
+    # "Sq *Speedy Burrito" line (see the Square-prefix handling in
+    # _vendor_category) wouldn't match anything otherwise.
+    (re.compile(
+        r"\b(burger|cafe|coffee|restaurant|diner|doordash|uber\s*eats|grubhub|postmates|burrito|"
+        r"pizza|taco|grill|bakery|deli|bar|pub|kitchen|eatery|entertainment)\b", re.IGNORECASE,
+    ), True, "Meals & Entertainment"),
+
+    # --- EXPENSE: Travel & Transportation ---
+    # Deliberately no bare "gas" keyword — that would collide with a "Gas
+    # & Electric" utility bill below. Gas-station brand names and the
+    # explicit "gas station" phrase are unambiguous stand-ins instead.
+    (re.compile(
+        r"\b(uber\s*trip|uber\s*pass|lyft|taxi|gas\s*station|chevron|shell\s*oil|exxon|parking|"
+        r"cityofsac|flight|airline|dmv|car\s*rental|transit)\b", re.IGNORECASE,
+    ), True, "Travel & Transportation"),
+
+    # --- EXPENSE: Office Supplies & Equipment ---
+    # Broad by design (Amazon/Walmart/Target cover almost anything a
+    # business might buy) — a deliberate tradeoff: better than every such
+    # purchase defaulting to Uncategorized, at the cost of occasionally
+    # miscategorizing inventory bought through one of these retailers.
+    (re.compile(
+        r"\b(amazon|amzn|temu|walmart|target|bookstore|hardware|depot|staples|best\s*buy)\b",
+        re.IGNORECASE,
+    ), True, "Office Supplies & Equipment"),
+
+    # --- EXPENSE: Software & IT Services ---
+    (re.compile(r"\b(mcafee|hosting|saas|antivirus|software\s*subscription)\b", re.IGNORECASE),
+     True, "Software & IT Services"),
+
+    # --- EXPENSE: Professional Services ---
+    (re.compile(
+        r"\b(worldremit|remitly|wire\s*transfer|coursera|consulting|legal|freelance|agency|"
+        r"upwork|fiverr)\b", re.IGNORECASE,
+    ), True, "Professional Services"),
+
+    # --- EXPENSE: Utilities & Rent ---
+    (re.compile(
+        r"\b(properties|realty|rent|lease|electric|gas\s*(?:&|and)\s*electric|pg\s*&?\s*e|water|"
+        r"waste\s*management|telecom|internet|at&t)\b", re.IGNORECASE,
+    ), True, "Utilities & Rent"),
 )
+
+# POS/aggregator/app-store billing prefixes that precede the REAL merchant
+# or app name rather than being a keyword to match on directly — e.g.
+# "Tst* Tastea - Delta Sho" or "Sq *Speedy Burrito" or "Google *Bumble".
+# See _vendor_category, which strips these before running the keyword pass
+# above (or, for Toast specifically, short-circuits entirely — see there).
+_TOAST_POS_PREFIX_PATTERN = re.compile(r"\btst\*", re.IGNORECASE)
+_SQUARE_POS_PREFIX_PATTERN = re.compile(r"\bsq\s*\*\s*", re.IGNORECASE)
+_APP_STORE_PREFIX_PATTERN = re.compile(r"\b(?:google|apple)\s*\*\s*", re.IGNORECASE)
 
 _BEGINNING_BALANCE_PATTERN = re.compile(r"(?:beginning|opening)\s+balance[^\d]{0,10}([\d,.]+\.\d{2})", re.IGNORECASE)
 _ENDING_BALANCE_PATTERN = re.compile(r"(?:ending|closing)\s+balance[^\d]{0,10}([\d,.]+\.\d{2})", re.IGNORECASE)
@@ -336,8 +421,29 @@ class OCRService:
         keyword signal already decided INCOME vs EXPENSE, so a vendor name
         is only ever used to refine the category, never to override that.
         """
+        # Toast is food-only POS in practice — an EXPENSE row carrying this
+        # prefix (a purchase AT a business that processes payments through
+        # Toast, e.g. "Tst* Tastea - Delta Sho") is confidently Meals &
+        # Entertainment regardless of what merchant name follows. This is
+        # the opposite direction from the INCOME "toast" entry in
+        # _VENDOR_CATEGORY_MAP (a Toast payout landing IN the account), so
+        # it only fires on an expense row.
+        if is_expense and _TOAST_POS_PREFIX_PATTERN.search(line):
+            return "Meals & Entertainment"
+
+        # Square (a general-purpose POS) and app-store billing lines print
+        # the real merchant/app name after a structural prefix, not a
+        # standalone merchant of their own (e.g. "Sq *Speedy Burrito",
+        # "Google *Bumble") — strip the prefix and re-run the same keyword
+        # pass below on what's left, rather than matching the literal
+        # prefix token (which wouldn't match anything anyway).
+        search_line = line
+        if is_expense:
+            search_line = _SQUARE_POS_PREFIX_PATTERN.sub("", search_line)
+            search_line = _APP_STORE_PREFIX_PATTERN.sub("", search_line)
+
         for pattern, vendor_is_expense, category in _VENDOR_CATEGORY_MAP:
-            if vendor_is_expense == is_expense and pattern.search(line):
+            if vendor_is_expense == is_expense and pattern.search(search_line):
                 return category
         return None
 
