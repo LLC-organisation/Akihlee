@@ -15,6 +15,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -64,7 +65,17 @@ public class ExtractedDataController {
      * Called by document-worker once OCR extraction finishes for a document.
      * Authenticated via a shared internal key rather than a user JWT, since
      * the worker has no tenant/user session of its own.
+     *
+     * @Transactional so the delete-then-reinsert bank-transaction sequence
+     * below is atomic — without it, an exception partway through the loop
+     * (as happened in production: deleteByExtractedDataId succeeded, then
+     * a later row threw before all replacements were saved) leaves a
+     * document's transactions partially deleted rather than either fully
+     * replaced or fully untouched, and a retry of the same request can
+     * itself fail differently (deleteByExtractedDataId has thrown
+     * TransactionRequiredException outside of an explicit transaction).
      */
+    @Transactional
     @PostMapping("/api/v1/internal/documents/{id}/extraction")
     public ResponseEntity<Void> receiveExtraction(
             @PathVariable UUID id,
@@ -109,7 +120,17 @@ public class ExtractedDataController {
                 // extraction attempt, so it's stamped fully confident.
                 BankTransaction.Type type = matchedRule != null ? matchedRule.getType() : BankTransaction.Type.valueOf(txn.type());
                 String category = matchedRule != null ? matchedRule.getCategory() : txn.category();
-                Double confidence = matchedRule != null ? 1.0 : txn.categoryConfidence();
+                // Double.valueOf(1.0), not a bare 1.0 literal — mixing a
+                // primitive double literal with a boxed Double operand in a
+                // ternary triggers Java's binary numeric promotion (JLS
+                // 15.25), which unboxes WHICHEVER branch is actually chosen
+                // at runtime to match the inferred primitive double type.
+                // txn.categoryConfidence() is null for a TRANSFER-type row
+                // (see VisionExtractionService._sanitize_bank_transactions —
+                // no categorization is ever attempted for those), so taking
+                // that branch threw a NullPointerException in production
+                // for every TRANSFER row with no matching vendor rule.
+                Double confidence = matchedRule != null ? Double.valueOf(1.0) : txn.categoryConfidence();
                 bankTransactionRepository.save(new BankTransaction(
                         data.getId(), document.getTenantId(),
                         LocalDate.parse(txn.transactionDate()),
